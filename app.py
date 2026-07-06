@@ -49,7 +49,7 @@ st.markdown("""
 st.sidebar.title("🔭 Observation Settings")
 st.sidebar.markdown("---")
 
-target = st.sidebar.selectbox("관측 대상 선택", ["달 (The Moon)", "금성 (Venus)"])
+target = st.sidebar.selectbox("관측 대상 선택", ["달 (The Moon)", "화성 (Mars, 외행성)"])
 direction = st.sidebar.radio("바라보는 방위", ["동 (East)", "남 (South)", "서 (West)", "북 (North)"], index=1)
 time_of_day = st.sidebar.select_slider(
     "시간대 선택",
@@ -57,8 +57,16 @@ time_of_day = st.sidebar.select_slider(
     value="밤 (22:00)"
 )
 
-# 데이터 계산을 위한 내부 로직
-phase_day = st.sidebar.slider("달의 음력 날짜 (위상 조절)", 0, 28, 7) if target == "달 (The Moon)" else 15
+# 데이터 계산을 위한 내부 로직 (위상 조절 슬라이더)
+if target == "달 (The Moon)":
+    phase_day = st.sidebar.slider("달의 음력 날짜 (위상 조절)", 0, 28, 7)
+else:
+    # 화성의 이각/위상 조건 설정 (충, 구, 합 등)
+    mars_position = st.sidebar.select_slider(
+        "화성의 위치 상태 변경",
+        options=["충 (Opposition, 지구와 가장 가깝고 밝음)", "구 (Quadrature, 반달 모양에 가까움)", "합 (Conjunction, 태양 반대편)"],
+        value="충 (Opposition, 지구와 가장 가깝고 밝음)"
+    )
 
 # 3. 메인 레이아웃
 st.markdown(f'<p class="main-header">SkyWatcher Simulator</p>', unsafe_allow_html=True)
@@ -77,40 +85,68 @@ current_sky = sky_colors[time_of_day]
 
 # 4. 시각화 로직 (지평선 및 천체 위치)
 with col1:
-    # 천체가 보이는지 여부 판단 (매우 간소화된 교육용 로직)
-    # 남중 기준: 상현달(음력7일)은 저녁에 남쪽, 보름달(15일)은 밤에 남쪽 등
-    visible = True
-    msg = ""
     
-    # 달의 위상 모양 (SVG 생성)
+    # 달의 위상 모양 (SVG 알맹이 생성)
     def get_moon_svg(day):
         ratio = np.cos((day/28)*2*np.pi)
-        # 상현/하현 방향 결정
         is_waxing = day < 14
         color = "#F4D03F" if "밤" in time_of_day or "새벽" in time_of_day or "저녁" in time_of_day else "#FFFFFFCC"
         
-        # 간단한 위상 시각화 (좌우 차오름)
-        if day == 0: return "" # 삭
+        if day == 0: 
+            return '<circle cx="50" cy="50" r="45" fill="#2c3e50" />'
+        
+        flag = '1' if is_waxing else '0'
+        rx_val = abs(ratio) * 45
+        ell_color = '#2c3e50' if abs(ratio) < 0.1 else color if ratio * (-1 if is_waxing else 1) > 0 else '#2c3e50'
+        
         return f"""
-        <svg width="100" height="100" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="45" fill="#2c3e50" />
+        <path d="M 50 5 A 45 45 0 0 {flag} 50 95" fill="{color}" />
+        <ellipse cx="50" cy="50" rx="{rx_val}" ry="45" fill="{ell_color}" />
+        """
+
+    # 화성의 위상 모양 (SVG 알맹이 생성)
+    def get_mars_svg(pos):
+        # 외행성은 항상 보름달에 가깝거나 약간 이지러진 형태만 가짐 (초승달/그믐달 불가)
+        color = "#E74C3C" if "밤" in time_of_day or "새벽" in time_of_day or "저녁" in time_of_day else "#E74C3CCC"
+        if pos.startswith("충"):
+            # 완전히 둥근 보름달 모양의 화성
+            return f'<circle cx="50" cy="50" r="45" fill="{color}" />'
+        elif pos.startswith("구"):
+            # 가장 많이 이지러졌을 때 (약 85% 정도만 차오른 반달 형태)
+            return f"""
             <circle cx="50" cy="50" r="45" fill="#2c3e50" />
-            <path d="M 50 5 A 45 45 0 0 {'1' if is_waxing else '0'} 50 95" fill="{color}" />
-            <ellipse cx="50" cy="50" rx="{abs(ratio)*45}" ry="45" fill="{'#2c3e50' if abs(ratio)<0.1 else color if ratio*(-1 if is_waxing else 1)>0 else '#2c3e50'}" />
+            <path d="M 50 5 A 45 45 0 0 1 50 95" fill="{color}" />
+            <ellipse cx="50" cy="50" rx="30" ry="45" fill="{color}" />
+            """
+        else:
+            # 합 위치일 때는 거의 둥글지만 태양 뒤에 숨어 실제론 안 보임
+            return f'<circle cx="50" cy="50" r="45" fill="{color}" opacity="0.3" />'
+
+    # 천체 그래픽 생성 및 HTML 조립
+    if target == "달 (The Moon)":
+        content_html = f"""
+        <svg width="100" height="100" viewBox="0 0 100 100" style="display: block; margin: 0 auto;">
+            {get_moon_svg(phase_day)}
+        </svg>
+        """
+    else:
+        content_html = f"""
+        <svg width="100" height="100" viewBox="0 0 100 100" style="display: block; margin: 0 auto;">
+            {get_mars_svg(mars_position)}
         </svg>
         """
 
-    moon_svg = get_moon_svg(phase_day) if target == "달 (The Moon)" else "🪐"
-
-    # 하늘창 렌더링
+    # 안전하게 결합된 마크다운 렌더링 (코드 깨짐 현상 방지 완료)
     st.markdown(f"""
     <div class="sky-container" style="background: {current_sky};">
-        <div style="position: absolute; bottom: 20px; width: 100%; color: white; font-weight: bold; font-size: 1.5rem;">
+        <div style="font-size: 1.5rem; color: white; font-weight: bold; margin-bottom: 20px;">
             {direction}쪽 하늘 지평선
         </div>
-        <div style="margin-top: 80px; font-size: 5rem;">
-            {moon_svg if visible else "이 시간/방향에는 보이지 않습니다"}
+        <div style="margin: 30px 0;">
+            {content_html}
         </div>
-        <div style="color: white; opacity: 0.8; margin-top: 20px;">
+        <div style="color: white; opacity: 0.8; font-size: 1.1rem;">
             {target} 관측 중
         </div>
     </div>
@@ -120,30 +156,35 @@ with col1:
 with col2:
     st.markdown('<div class="info-card">', unsafe_allow_html=True)
     st.subheader("📊 관측 데이터")
-    st.write(f"**현재 위치:** 서울 (위도 37.5°N)")
-    st.write(f"**방위각:** {direction} (관측자 기준)")
-    st.write(f"**고도:** 시간대에 따라 보정됨")
+    st.write(f"**현재 관측 대상:** {target}")
+    st.write(f"**바라보는 방향:** {direction}쪽 하늘")
+    st.write(f"**선택한 시간:** {time_of_day}")
+    if target == "화성 (Mars, 외행성)":
+        st.write(f"**화성의 겉보기 크기:** {'가장 크고 밝음(시직경 최대)' if mars_position.startswith('충') else '매우 작고 어두움'}")
     st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="info-card">', unsafe_allow_html=True)
-    st.subheader("💡 과학적 원리")
+    st.subheader("💡 과학적 원리 탐구")
+    
     if target == "달 (The Moon)":
-        if direction == "남 (South)":
-            st.info("남쪽 하늘에서는 달이 가장 높게 뜨는 '남중'을 관측할 수 있습니다.")
-        elif direction == "동 (East)":
-            st.info("모든 천체는 지구의 자전으로 인해 동쪽에서 떠오릅니다.")
-        st.write(f"음력 {phase_day}일경 달은 {target.split()[0]} 상태입니다.")
+        st.info(f"음력 {phase_day}일의 달을 관측하고 있습니다. 달의 위상은 태양-지구-달이 이루는 각도에 따라 결정됩니다.")
     else:
-        st.warning("금성은 내행성이므로 한밤중(자정)에는 절대로 보이지 않습니다! 오직 새벽이나 초저녁에만 볼 수 있습니다.")
+        if mars_position.startswith("충"):
+            st.success("✨ **'충' 위치의 외행성 특징:**\n지구-화성 거리가 가장 가까워 역대급으로 밝게 보이며, 한밤중(자정 무렵)에 남쪽 하늘에서 가장 높게 뜹니다. 태양의 정반대에 있으므로 보름달처럼 둥글게 보입니다.")
+        elif mars_position.startswith("구"):
+            st.warning("🌗 **'구' 위치의 외행성 특징:**\n외행성이 태양과 90도 각도를 이룰 때입니다. 이때 외행성은 완벽한 보름달 형태가 되지 못하고, 지구에서 볼 때 가장 많이 이지러진 형태(약간 찌그러진 보름달 모양)로 관측됩니다.")
+        else:
+            st.error("☀️ **'합' 위치의 외행성 특징:**\n화성이 태양의 바로 뒤편에 위치합니다. 낮 시간대에 태양과 함께 뜨고 지기 때문에 강한 태양빛에 가려져 지구에서는 관측할 수 없습니다.")
+            
     st.markdown('</div>', unsafe_allow_html=True)
 
-# 6. 하단 가이드
+# 6. 하단 학습 탭 가이드
 st.markdown("---")
-st.markdown("### 🎓 학습 가이드")
-tabs = st.tabs(["달의 이동", "행성의 위상", "방위별 특징"])
+st.markdown("### 🎓 지구과학 핵심 개념 학습")
+tabs = st.tabs(["외행성의 겉보기 운동", "외행성의 위상 변화 특징", "내행성과의 결정적 차이"])
 with tabs[0]:
-    st.write("달은 매일 약 50분씩 늦게 뜹니다. 이는 달이 지구 주위를 공전하기 때문입니다.")
+    st.write("**순행과 역행:** 외행성은 보통 별자리 사이를 서쪽에서 동쪽으로 이동(순행)하지만, 지구의 공전 속도가 더 빠르기 때문에 화성을 추월하는 **'충' 근처 시점에서는 동쪽에서 서쪽으로 역행**하는 것처럼 보입니다.")
 with tabs[1]:
-    st.write("금성은 태양 근처에서만 보이며, 망원경으로 보면 보름달 모양부터 초승달 모양까지 변하는 것을 알 수 있습니다.")
+    st.write("**위상 범위 제한:** 내행성(금성)은 초승달, 반달, 보름달 모양이 모두 나타나지만, **외행성은 지구 공전 궤도 바깥에 있으므로 결코 초승달이나 반달 모양으로 보일 수 없으며**, 항상 보름달에 가까운 찬 모양만 보입니다.")
 with tabs[2]:
-    st.write("북쪽 하늘에서는 별들이 북극성을 중심으로 시계 반대 방향으로 회전하는 것처럼 보입니다.")
+    st.write("**관측 시간대:** 금성은 한밤중(자정)에 절대 볼 수 없지만, 화성 같은 외행성은 '충'의 위치에 있을 때 **한밤중인 자정에 남쪽 하늘에서 가장 잘 보입니다.**")
