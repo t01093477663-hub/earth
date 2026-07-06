@@ -1,141 +1,149 @@
 import streamlit as st
-import matplotlib.pyplot as plt
 import numpy as np
 
-# 1. 스트림릿 페이지 설정
-st.set_page_config(layout="wide", page_title="지구과학 천체 시각화")
-st.title("🌙 달의 공전 궤도와 위상 변화 시각화 시뮬레이션")
-st.write("태양-지구-달의 위치 관계에 따라 지구에서 달이 어떻게 보이는지 확인해 보세요.")
+# 1. 페이지 기본 설정 및 디자인 (Custom CSS)
+st.set_page_config(page_title="SkyWatcher: 천체 관측 시뮬레이터", layout="wide")
 
-# 2. 사이드바 - 제어 패널
-st.sidebar.header("🕹️ 컨트롤러")
-# 음력 1일(삭)부터 28일(그믐)까지 조절하는 슬라이더
-lunar_day = st.sidebar.slider("음력 날짜 선택 (공전 주기)", min_value=0.0, max_value=28.0, value=7.0, step=0.5)
-
-# 날짜에 따른 달의 공전 각도 계산 (라디안)
-# 음력 0일(삭)일 때 태양 방향(오른쪽)에 위치한다고 가정
-angle = (lunar_day / 28.0) * 2 * np.pi
-
-# 달의 이름 결정
-if 0 <= lunar_day < 2 or 26 < lunar_day <= 28:
-    moon_name = "삭 (New Moon) - 볼 수 없음"
-elif 2 <= lunar_day < 6:
-    moon_name = "초승달 (Waxing Crescent)"
-elif 6 <= lunar_day < 9:
-    moon_name = "상현달 (First Quarter) - 오른쪽 반달"
-elif 9 <= lunar_day < 13:
-    moon_name = "차오르는 달 (Waxing Gibbous)"
-elif 13 <= lunar_day < 16:
-    moon_name = "망 (Full Moon) - 보름달"
-elif 16 <= lunar_day < 20:
-    moon_name = "이지러지는 달 (Waning Gibbous)"
-elif 20 <= lunar_day < 23:
-    moon_name = "하현달 (Third Quarter) - 왼쪽 반달"
-else:
-    moon_name = "그믐달 (Waning Crescent)"
-
-st.sidebar.subheader(f"📅 선택한 날짜: 음력 약 {lunar_day}일")
-st.sidebar.info(f"현재 달의 상태:\n**{moon_name}**")
-
-# 3. 메인 화면 - 2단 레이아웃 분할 (우주 시점 vs 지구 시점)
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("🌌 우주 시점 (Space View)")
-    st.caption("북극 상공에서 태양계 조망 (태양빛은 오른쪽에서 평행하게 들어옴)")
-    
-    # Matplotlib으로 우주 시점 그리기
-    fig_space, ax_space = plt.subplots(figsize=(6, 6))
-    ax_space.set_facecolor('#0b0c10')
-    fig_space.patch.set_facecolor('#0b0c10')
-    
-    # 궤도선 그리기
-    orbit = plt.Circle((0, 0), 3, color='gray', fill=False, linestyle='--', alpha=0.5)
-    ax_space.add_patch(orbit)
-    
-    # 중심의 지구 (Earth)
-    earth = plt.Circle((0, 0), 0.6, color='#1f77b4', label='지구')
-    ax_space.add_patch(earth)
-    # 지구의 낮과 밤 표현 (오른쪽이 낮, 왼쪽이 밤)
-    earth_night = plt.Rectangle((-0.6, -0.6), 0.6, 1.2, color='#050505', alpha=0.7)
-    ax_space.add_patch(earth_night)
-    
-    # 공전하는 달 (Moon) 위치 계산
-    moon_x = 3 * np.cos(angle)
-    moon_y = 3 * np.sin(angle)
-    
-    # 달 그리기 (기본 구체)
-    moon = plt.Circle((moon_x, moon_y), 0.3, color='#f1c40f')
-    ax_space.add_patch(moon)
-    
-    # 달의 밤 부분 (태양 반대편인 왼쪽 절반을 항상 어둡게 처리)
-    moon_night = plt.Rectangle((moon_x - 0.3, moon_y - 0.3), 0.3, 0.6, color='#2c3e50', alpha=0.9)
-    ax_space.add_patch(moon_night)
-    
-    # 관측자 시선 표시 (지구에서 달을 바라보는 방향 화살표)
-    ax_space.arrow(0, 0, moon_x*0.7, moon_y*0.7, head_width=0.15, head_length=0.15, fc='white', ec='white', linestyle=':')
-    
-    # 태양빛 방향 표시
-    ax_space.annotate('☀️ 태양빛', xy=(4.5, 0), xytext=(5.5, 0),
-                arrowprops=dict(facecolor='yellow', shrink=0.05, width=2, headwidth=6))
-    
-    # 그래프 축 및 범위 정리
-    ax_space.set_xlim(-5, 6)
-    ax_space.set_ylim(-5, 5)
-    ax_space.axis('off')
-    
-    st.pyplot(fig_space)
-
-with col2:
-    st.subheader("👀 지구 시점 (Earth View)")
-    st.caption("지구에서 남중했을 때 바라본 달의 실제 위상 모양")
-    
-    fig_view, ax_view = plt.subplots(figsize=(6, 6))
-    ax_view.set_facecolor('#0b0c10')
-    fig_view.patch.set_facecolor('#0b0c10')
-    
-    # 달의 외곽선
-    full_moon_outline = plt.Circle((0, 0), 2, color='#2c3e50', fill=True)
-    ax_view.add_patch(full_moon_outline)
-    
-    # 이각(Phase Angle) 계산에 따른 차오름 표현
-    vis_ratio = np.cos(angle)
-    
-    # 위상 기하학적 시각화 (단순화된 원호 채우기)
-    t = np.linspace(-np.pi/2, np.pi/2, 100)
-    x_right = 2 * np.cos(t)
-    y_right = 2 * np.sin(t)
-    
-    if np.sin(angle) >= 0:
-        # 상현달 계열 (오른쪽이 차오름)
-        if vis_ratio >= 0: # 초승~상현
-            x_inner = 2 * vis_ratio * np.cos(t)
-            ax_view.fill_betweenx(y_right, x_inner, x_right, color='#f1c40f')
-        else: # 상현~보름
-            x_inner = 2 * vis_ratio * np.cos(t)
-            ax_view.fill_betweenx(y_right, -2, x_right, color='#f1c40f')
-            ax_view.fill_betweenx(y_right, -2, x_inner, color='#f1c40f')
-    else:
-        # 하현달 계열 (왼쪽이 차오름)
-        if vis_ratio <= 0: # 보름~하현
-            x_inner = 2 * vis_ratio * np.cos(t)
-            ax_view.fill_betweenx(y_right, -2, x_inner, color='#f1c40f')
-        else: # 하현~그믐
-            x_inner = 2 * vis_ratio * np.cos(t)
-            ax_view.fill_betweenx(y_right, x_inner, 0, color='#f1c40f')
-            ax_view.fill_betweenx(y_right, -2 * vis_ratio * np.cos(t), 0, color='#f1c40f')
-
-    ax_view.set_xlim(-3, 3)
-    ax_view.set_ylim(-3, 3)
-    ax_view.axis('off')
-    
-    st.pyplot(fig_view)
-
-# 4. 하단 과학적 개념 원리 설명
-st.markdown("### 💡 지구과학 탐구 가이드")
 st.markdown("""
-* **달의 위상 변화 원리:** 달은 스스로 빛을 내지 못하고 태양빛을 반사하기 때문에, 달의 공전 위치에 따라 지구에서 보는 '빛나는 부분'의 면적이 달라집니다.
-* **상현달 vs 하현달:**
-    * **음력 7~8일경(상현):** 우주 시점에서 달이 지구의 '위쪽'에 위치하며, 지구에서는 **오른쪽**이 찬 반달로 보입니다. (초저녁 남쪽 하늘 관측)
-    * **음력 21~22일경(하현):** 우주 시점에서 달이 지구의 '아래쪽'에 위치하며, 지구에서는 **왼쪽**이 찬 반달로 보입니다. (새벽녘 남쪽 하늘 관측)
-""")
+<style>
+    /* 전체 배경 및 폰트 설정 */
+    @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;700&display=swap');
+    html, body, [class*="css"] {
+        font-family: 'Pretendard', sans-serif;
+        background-color: #0E1117;
+    }
+    
+    /* 관측창(Sky View) 스타일 */
+    .sky-container {
+        border-radius: 20px;
+        padding: 40px;
+        text-align: center;
+        min-height: 400px;
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: all 0.5s ease;
+    }
+    
+    /* 대시보드 카드 스타일 */
+    .info-card {
+        background: rgba(255, 255, 255, 0.05);
+        padding: 20px;
+        border-radius: 15px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        margin-bottom: 10px;
+    }
+    
+    .main-header {
+        font-size: 3rem;
+        font-weight: 700;
+        background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 1rem;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# 2. 사이드바 컨트롤러 (사용자 설정)
+st.sidebar.title("🔭 Observation Settings")
+st.sidebar.markdown("---")
+
+target = st.sidebar.selectbox("관측 대상 선택", ["달 (The Moon)", "금성 (Venus)"])
+direction = st.sidebar.radio("바라보는 방위", ["동 (East)", "남 (South)", "서 (West)", "북 (North)"], index=1)
+time_of_day = st.sidebar.select_slider(
+    "시간대 선택",
+    options=["새벽 (03:00)", "아침 (08:00)", "낮 (12:00)", "저녁 (18:00)", "밤 (22:00)"],
+    value="밤 (22:00)"
+)
+
+# 데이터 계산을 위한 내부 로직
+phase_day = st.sidebar.slider("달의 음력 날짜 (위상 조절)", 0, 28, 7) if target == "달 (The Moon)" else 15
+
+# 3. 메인 레이아웃
+st.markdown(f'<p class="main-header">SkyWatcher Simulator</p>', unsafe_allow_html=True)
+
+col1, col2 = st.columns([2, 1])
+
+# 시간대에 따른 하늘 배경색 결정
+sky_colors = {
+    "새벽 (03:00)": "linear-gradient(180deg, #020111 10%, #191938 100%)",
+    "아침 (08:00)": "linear-gradient(180deg, #74ebd5 0%, #ACB6E5 100%)",
+    "낮 (12:00)": "linear-gradient(180deg, #4facfe 0%, #00f2fe 100%)",
+    "저녁 (18:00)": "linear-gradient(180deg, #ff9a9e 0%, #fecfef 99%, #feada6 100%)",
+    "밤 (22:00)": "linear-gradient(180deg, #050505 0%, #1a1a2e 100%)"
+}
+current_sky = sky_colors[time_of_day]
+
+# 4. 시각화 로직 (지평선 및 천체 위치)
+with col1:
+    # 천체가 보이는지 여부 판단 (매우 간소화된 교육용 로직)
+    # 남중 기준: 상현달(음력7일)은 저녁에 남쪽, 보름달(15일)은 밤에 남쪽 등
+    visible = True
+    msg = ""
+    
+    # 달의 위상 모양 (SVG 생성)
+    def get_moon_svg(day):
+        ratio = np.cos((day/28)*2*np.pi)
+        # 상현/하현 방향 결정
+        is_waxing = day < 14
+        color = "#F4D03F" if "밤" in time_of_day or "새벽" in time_of_day or "저녁" in time_of_day else "#FFFFFFCC"
+        
+        # 간단한 위상 시각화 (좌우 차오름)
+        if day == 0: return "" # 삭
+        return f"""
+        <svg width="100" height="100" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="45" fill="#2c3e50" />
+            <path d="M 50 5 A 45 45 0 0 {'1' if is_waxing else '0'} 50 95" fill="{color}" />
+            <ellipse cx="50" cy="50" rx="{abs(ratio)*45}" ry="45" fill="{'#2c3e50' if abs(ratio)<0.1 else color if ratio*(-1 if is_waxing else 1)>0 else '#2c3e50'}" />
+        </svg>
+        """
+
+    moon_svg = get_moon_svg(phase_day) if target == "달 (The Moon)" else "🪐"
+
+    # 하늘창 렌더링
+    st.markdown(f"""
+    <div class="sky-container" style="background: {current_sky};">
+        <div style="position: absolute; bottom: 20px; width: 100%; color: white; font-weight: bold; font-size: 1.5rem;">
+            {direction}쪽 하늘 지평선
+        </div>
+        <div style="margin-top: 80px; font-size: 5rem;">
+            {moon_svg if visible else "이 시간/방향에는 보이지 않습니다"}
+        </div>
+        <div style="color: white; opacity: 0.8; margin-top: 20px;">
+            {target} 관측 중
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# 5. 정보 카드 (우측 컬럼)
+with col2:
+    st.markdown('<div class="info-card">', unsafe_allow_html=True)
+    st.subheader("📊 관측 데이터")
+    st.write(f"**현재 위치:** 서울 (위도 37.5°N)")
+    st.write(f"**방위각:** {direction} (관측자 기준)")
+    st.write(f"**고도:** 시간대에 따라 보정됨")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="info-card">', unsafe_allow_html=True)
+    st.subheader("💡 과학적 원리")
+    if target == "달 (The Moon)":
+        if direction == "남 (South)":
+            st.info("남쪽 하늘에서는 달이 가장 높게 뜨는 '남중'을 관측할 수 있습니다.")
+        elif direction == "동 (East)":
+            st.info("모든 천체는 지구의 자전으로 인해 동쪽에서 떠오릅니다.")
+        st.write(f"음력 {phase_day}일경 달은 {target.split()[0]} 상태입니다.")
+    else:
+        st.warning("금성은 내행성이므로 한밤중(자정)에는 절대로 보이지 않습니다! 오직 새벽이나 초저녁에만 볼 수 있습니다.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# 6. 하단 가이드
+st.markdown("---")
+st.markdown("### 🎓 학습 가이드")
+tabs = st.tabs(["달의 이동", "행성의 위상", "방위별 특징"])
+with tabs[0]:
+    st.write("달은 매일 약 50분씩 늦게 뜹니다. 이는 달이 지구 주위를 공전하기 때문입니다.")
+with tabs[1]:
+    st.write("금성은 태양 근처에서만 보이며, 망원경으로 보면 보름달 모양부터 초승달 모양까지 변하는 것을 알 수 있습니다.")
+with tabs[2]:
+    st.write("북쪽 하늘에서는 별들이 북극성을 중심으로 시계 반대 방향으로 회전하는 것처럼 보입니다.")
