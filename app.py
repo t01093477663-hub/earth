@@ -37,8 +37,6 @@ else:
 st.sidebar.subheader(f"📅 선택한 날짜: 음력 약 {lunar_day}일")
 st.sidebar.info(f"현재 달의 상태:\n**{moon_name}**")
 
----
-
 # 3. 메인 화면 - 2단 레이아웃 분할 (우주 시점 vs 지구 시점)
 col1, col2 = st.columns(2)
 
@@ -71,10 +69,7 @@ with col1:
     ax_space.add_patch(moon)
     
     # 달의 밤 부분 (태양 반대편인 왼쪽 절반을 항상 어둡게 처리)
-    # 달의 중심 기준 왼쪽을 가리는 박스 생성
     moon_night = plt.Rectangle((moon_x - 0.3, moon_y - 0.3), 0.3, 0.6, color='#2c3e50', alpha=0.9)
-    # 햇빛 방향에 맞게 달의 그림자 고정 (항상 왼쪽이 어두움)
-    # 단, 간단한 시각화를 위해 사각형 대신 평행한 그림자 효과를 처리
     ax_space.add_patch(moon_night)
     
     # 관측자 시선 표시 (지구에서 달을 바라보는 방향 화살표)
@@ -104,11 +99,9 @@ with col2:
     ax_view.add_patch(full_moon_outline)
     
     # 이각(Phase Angle) 계산에 따른 차오름 표현
-    # cos(angle) 값에 따라 위상의 형태가 바뀜
     vis_ratio = np.cos(angle)
     
     # 위상 기하학적 시각화 (단순화된 원호 채우기)
-    # 각도에 따라 보이는 형태를 마스킹 처리하여 달 모양 유도
     t = np.linspace(-np.pi/2, np.pi/2, 100)
     x_right = 2 * np.cos(t)
     y_right = 2 * np.sin(t)
@@ -130,7 +123,6 @@ with col2:
         else: # 하현~그믐
             x_inner = 2 * vis_ratio * np.cos(t)
             ax_view.fill_betweenx(y_right, x_inner, 0, color='#f1c40f')
-            # 왼쪽 반원 영역 조정
             ax_view.fill_betweenx(y_right, -2 * vis_ratio * np.cos(t), 0, color='#f1c40f')
 
     ax_view.set_xlim(-3, 3)
@@ -139,12 +131,11 @@ with col2:
     
     st.pyplot(fig_view)
 
----
-
 # 4. 하단 과학적 개념 원리 설명
 st.markdown("### 💡 지구과학 탐구 가이드")
 st.markdown("""
 * **달의 위상 변화 원리:** 달은 스스로 빛을 내지 못하고 태양빛을 반사하기 때문에, 달의 공전 위치에 따라 지구에서 보는 '빛나는 부분'의 면적이 달라집니다.
-* **상현달 vs 하현달:** * **음력 7~8일경(상현):** 우주 시점에서 달이 지구의 '위쪽'에 위치하며, 지구에서는 **오른쪽**이 찬 반달로 보입니다. (초저녁 남쪽 하늘 관측)
+* **상현달 vs 하현달:**
+    * **음력 7~8일경(상현):** 우주 시점에서 달이 지구의 '위쪽'에 위치하며, 지구에서는 **오른쪽**이 찬 반달로 보입니다. (초저녁 남쪽 하늘 관측)
     * **음력 21~22일경(하현):** 우주 시점에서 달이 지구의 '아래쪽'에 위치하며, 지구에서는 **왼쪽**이 찬 반달로 보입니다. (새벽녘 남쪽 하늘 관측)
 """)
