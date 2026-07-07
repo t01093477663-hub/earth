@@ -41,7 +41,7 @@ st.markdown("""
 if "current_hour" not in st.session_state:
     st.session_state.current_hour = 18  # 초저녁(18시) 기본값
 if "current_phase" not in st.session_state:
-    st.session_state.current_phase = 47 # 초기 위치: 동방최대이각(47°)
+    st.session_state.current_phase = 47 # 초기 위치 기본값
 
 # 3. 사이드바 제어 패널
 st.sidebar.title("🔭 Astro Control")
@@ -84,16 +84,14 @@ with col1:
     pos_status = "정상 위상 관계"
     celestial_graphics = ""
     
-    # 가시성 개선용 색상 정의 (어두운 면을 배경과 완전히 분리)
-    dark_side_color = "#2A3142"  # 어두운 부분의 색상 (연한 회색빛)
-    dark_side_stroke = "rgba(255,255,255,0.2)" # 형태를 알아볼 수 있는 테두리선
+    dark_side_color = "#2A3142"  
+    dark_side_stroke = "rgba(255,255,255,0.2)" 
     
     phase_angle = st.session_state.current_phase % 360
     
     if "내행성" in target_mode:
         target_color = "#FB923C"
-        # [교정] 태양-지구 선 기준 오른쪽(0~180°)이 동방구역(오른쪽이 밝음 -> 상현/초승형)
-        # 왼쪽(180~360°)이 서방구역(왼쪽이 밝음 -> 하현/그믐형)
+        # [방위 교정 완수] 우측(0~180도)이 동방구역(오른쪽이 밝음), 좌측(180~360도)이 서방구역(왼쪽이 밝음)
         phase_ratio = (1 + np.cos(np.radians(phase_angle))) / 2
         is_lit_right = (phase_angle < 180) 
         rx_val = abs(45 * (2 * phase_ratio - 1))
@@ -108,14 +106,13 @@ with col1:
             pos_status = "내합 (시직경 최대, 관찰 불가/삭)"
         elif phase_angle == 180:
             pos_status = "외합 (시직경 최소, 관찰 불가/망)"
-        elif 40 <= phase_angle <= 50:
+        elif 40 <= phase_angle <= 55:
             pos_status = "동방최대이각 (초저녁 서쪽하늘, 오른쪽 반달)"
-        elif 310 <= phase_angle <= 320:
+        elif 305 <= phase_angle <= 320:
             pos_status = "서방최대이각 (새벽 동쪽하늘, 왼쪽 반달)"
             
     elif "일식" in target_mode:
         target_color = "#FBBF24"
-        # 일식 모드에서 달의 위상은 삭(0도) 주변 관찰
         phase_ratio = (1 - np.cos(np.radians(phase_angle))) / 2
         is_lit_right = (phase_angle < 180)
         rx_val = abs(45 * (2 * phase_ratio - 1))
@@ -135,7 +132,6 @@ with col1:
     elif "월식" in target_mode:
         target_color = "#FBBF24"
         if phase_angle == 180:
-            # 지구 본그림자에 들어간 블러드문 시각화
             celestial_graphics = '<circle cx="50" cy="50" r="45" fill="#991B1B" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>'
             pos_status = "개기월식 현상 발생 (지구 본그림자 진입 / 블러드문)"
         else:
@@ -150,14 +146,34 @@ with col1:
             """
             pos_status = "월식 범위 외 (달의 일반 위상 상태)"
             
-    else: # 외행성 모드
+    else: # 외행성 모드 (위상 및 크기 변화 연산 문제 해결)
         target_color = "#EF4444"
-        # 외행성은 지구보다 바깥에 있으므로 항상 망(보름달)에 가까운 면만 보임
-        celestial_graphics = f'<circle cx="50" cy="50" r="45" fill="{target_color}" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>'
-        if phase_angle == 0: pos_status = "충 (자정 남중, 시직경 최대, 역행)"
-        elif phase_angle == 90: pos_status = "동구 (초저녁 남중)"
-        elif phase_angle == 180: pos_status = "합 (태양 뒤편 배치, 관측 불가)"
-        elif phase_angle == 270: pos_status = "서구 (새벽 남중)"
+        
+        # 지구(50,80), 태양(50,50), 외행성(궤도 반지름 42) 사이의 거리 실시간 연산 -> 시직경 조절
+        rad_calc = np.radians(90 - phase_angle)
+        ex = 50 + 42 * np.cos(rad_calc)
+        ey = 50 + 42 * np.sin(rad_calc)
+        dist_to_earth = np.sqrt((ex - 50)**2 + (ey - 80)**2)
+        
+        # 거리가 가까울수록(충=12일 때 최대 45), 멀수록(합=72일 때 최소 18) 시직경 유동적 매핑
+        dynamic_r = 18 + (45 - 18) * (1.0 - (dist_to_earth - 12) / 60)
+        
+        # 외행성의 미세한 차구 위상 변화율 연산 (지구-외행성-태양 사잇각 반영)
+        # 충(0)과 합(180)에서는 보름달(1.0), 동구(90)와 서구(270)에서는 약간 깎임(약 0.88)
+        ell_ratio = 0.88 + 0.12 * abs(np.cos(np.radians(phase_angle)))
+        is_lit_right = (phase_angle < 180)
+        rx_val = abs(dynamic_r * (2 * ell_ratio - 1))
+        ellipse_fill = dark_side_color if ell_ratio > 0.5 else target_color
+        
+        celestial_graphics = f"""
+        <circle cx="50" cy="50" r="{dynamic_r}" fill="{dark_side_color}" stroke="{dark_side_stroke}" stroke-width="1" />
+        <path d="M 50 {50-dynamic_r} A {dynamic_r} {dynamic_r} 0 0 {1 if is_lit_right else 0} 50 {50+dynamic_r} Z" fill="{target_color}" />
+        <ellipse cx="50" cy="50" rx="{rx_val}" ry="{dynamic_r}" fill="{ellipse_fill}" />
+        """
+        if phase_angle == 0: pos_status = "충 (자정 남중, 시직경 최대 보름달 모양)"
+        elif phase_angle == 90: pos_status = "동구 (초저녁 남중, 좌측이 미세하게 깎임)"
+        elif phase_angle == 180: pos_status = "합 (관측 불가, 시직경 최소 보름달 모양)"
+        elif phase_angle == 270: pos_status = "서구 (새벽 남중, 우측이 미세하게 깎임)"
 
     sky_html = f"""
     <div style="background:{sky_gradient}; border-radius:12px; padding:35px; text-align:center;">
@@ -190,7 +206,7 @@ with col2:
     shadow_overlay = ""
     if "내행성" in target_mode:
         orbit_radius = 16
-        # [교정] 태양 기준 오른쪽이 동방구역(각도 증가), 왼쪽이 서방구역
+        # [방위 교정 적용] 시계 방향 오프셋 각도 전환 연산 처리 완료
         rad = np.radians(90 - st.session_state.current_phase)
         obj_x = sun_x + orbit_radius * np.cos(rad)
         obj_y = sun_y + orbit_radius * np.sin(rad)
@@ -207,10 +223,8 @@ with col2:
         obj_x = earth_x + orbit_radius * np.cos(rad)
         obj_y = earth_y + orbit_radius * np.sin(rad)
         obj_color = "#FBBF24"
-        # 지구 뒷편 본그림자 영역 시각화
         shadow_overlay = f'<polygon points="{earth_x-3.5},{earth_y} {earth_x+3.5},{earth_y} {earth_x+7},100 {earth_x-7},100" fill="rgba(239, 68, 68, 0.15)" stroke="rgba(239,68,68,0.3)" stroke-width="0.3" stroke-dasharray="1" />'
-    else: # 외행성 모드
-        # [교정] 충 위치에서 지구(80)와 겹치지 않도록 궤도 반지름을 34에서 42로 확장하여 격리!
+    else: 
         orbit_radius = 42 
         rad = np.radians(90 - st.session_state.current_phase)
         obj_x = sun_x + orbit_radius * np.cos(rad)
@@ -233,10 +247,10 @@ with col2:
     """
     components.html(orbit_html, height=310)
 
-    # 연속 탐색용 각도 슬라이더 추가 (다른 위치에서도 위상을 자유롭게 볼 수 있음)
-    st.markdown('<p class="control-label">🔄 공전 각도 정밀 제어 (모든 위치 위상 탐색)</p>', unsafe_allow_html=True)
-    st.session_state.current_phase = st.slider(
-        "공전 각도 조절 (°)", min_value=0, max_value=359, value=int(st.session_state.current_phase), step=1
+    # [터치 버그 수정] key를 직접 연동하여 슬라이더 조절 즉시 화면 업데이트가 수행됨
+    st.markdown('<p class="control-label">🔄 공전 각도 정밀 제어 (즉각적인 실시간 리렌더링)</p>', unsafe_allow_html=True)
+    st.slider(
+        "공전 각도 조절 (°)", min_value=0, max_value=359, key="current_phase", step=1
     )
     
     st.markdown('<p class="control-label">🌌 천체 공전 위치 퀵 매핑 (PPT 주요 개념)</p>', unsafe_allow_html=True)
@@ -262,7 +276,7 @@ with col2:
             if st.button("🌕 망 (월식 위치 / 180°)", key="p_mang_m"): st.session_state.current_phase = 180; st.rerun()
         with p_col2:
             if st.button("🌗 하현달 (270°)", key="p_ha_m"): st.session_state.current_phase = 270; st.rerun()
-    else: # 외행성 모드 (동구, 서구 완벽 추가)
+    else: 
         p_col1, p_col2, p_col3, p_col4 = st.columns(4)
         with p_col1:
             if st.button("🔴 충 (0°)", key="p_choong"): st.session_state.current_phase = 0; st.rerun()
@@ -280,7 +294,7 @@ st.markdown("<h3 style='font-size:1.1rem; font-weight:600; color:#8B949E; margin
 
 if "내행성" in target_mode:
     st.markdown("""
-    * **동방최대이각 (47° 부근 - 오른쪽 배치):** 태양-지구 선 기준 우측에 위치합니다. 저녁 18시에 관측자가 서쪽 하늘을 바라볼 때 태양이 지고 난 후 지평선 위쪽에 남아있으므로 **초저녁 서쪽 하늘**에서 **오른쪽 면이 밝은 상현달 모양(반달)**으로 관측됩니다.
+    * **동방최대이각 (47° 부근 - 오른쪽 배치):** 태양-지구 선 기준 우측에 위치합니다. 저녁 18시에 관측자가 서쪽 하늘을 바라볼 때 태양이 지고 난 후 서쪽 지평선 위에 남아있으므로 **초저녁 서쪽 하늘**에서 **오른쪽 면이 밝은 상현달 모양(반달)**으로 관측됩니다.
     * **서방최대이각 (313° 부근 - 왼쪽 배치):** 태양-지구 선 기준 좌측에 위치합니다. 새벽 6시에 동쪽 하늘을 바라볼 때 태양보다 먼저 떠올라 위치하므로 **새벽 동쪽 하늘**에서 **왼쪽 면이 밝은 하현달 모양(반달)**으로 관측됩니다.
     """)
 elif "일식" in target_mode:
@@ -293,7 +307,7 @@ elif "월식" in target_mode:
     """)
 else:
     st.markdown("""
-    * **충 (0°):** 외행성이 지구와 가장 가까워지는 위치로, 지구-태양 일직선 바깥 방향에 정렬합니다. 자정(24시)에 남중하므로 한밤중에 가장 크게 역행 상태로 관측됩니다.
-    * **동구 (90°) / 서구 (270°):** 태양-지구 연결선과 외행성이 이루는 각도가 **직각($90^\circ$)**을 이룰 때를 의미합니다. 동구 위치일 때는 초저녁(18시)에 남중하고, 서구 위치일 때는 새벽(6시)에 남중하는 기하학적 특징을 가집니다.
+    * **충 (0°):** 외행성이 지구와 가장 가까워지는 위치로, 지구-태양 일직선 바깥 방향(아래쪽)에 정렬합니다. 자정(24시)에 남중하므로 한밤중에 가장 크게 보름달(망) 모양 구조로 관측됩니다.
+    * **동구 (90° - 우측) / 서구 (270° - 좌측):** 태양-지구 연결선과 외행성이 이루는 각도가 정확히 **직각($90^\circ$)**을 이룰 때를 의미합니다. 동구 위치일 때는 초저녁(18시)에 남중하고, 서구 위치일 때는 새벽(6시)에 남중하는 기하학적 특징을 가집니다.
     """)
 st.markdown('</div>', unsafe_allow_html=True)
