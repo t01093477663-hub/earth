@@ -99,10 +99,7 @@ with col1:
     planet_opacity = "opacity='0.3'" if is_daytime else "opacity='1'"
     
     # [방위 위치 계산 연산] 남쪽 하늘 기준: 동쪽이 왼쪽(X=20), 서쪽이 오른쪽(X=80)
-    # 공전 각도(phase_angle)에 따라 가로 위치(tgt_x)를 동적 매핑
     if "내행성" in target_mode:
-        # 내행성은 태양 주변(중앙 X=50)에서 겉보기 왕복 운동을 함
-        # 동방최대이각(47도 부근)일 때 실제로 관측 시선상 태양의 '왼쪽(동쪽)'에 위치하게 됨
         tgt_x = 50 - 30 * np.sin(np.radians(phase_angle)) 
         tgt_y = 50 
         
@@ -110,16 +107,22 @@ with col1:
         phase_ratio = (1 + np.cos(np.radians(phase_angle))) / 2
         is_lit_right = (phase_angle < 180) 
         
-        # 실제 천체 모양 스케일링
         r_val = 15
         rx_val = abs(r_val * (2 * phase_ratio - 1))
         ellipse_fill = dark_side_color if phase_ratio > 0.5 else target_color
         
+        # 중괄호 문법 오류 방지를 위해 명확하게 공백 분리하여 대입
+        scale_val = r_val / 50
+        trans_x = tgt_x - r_val
+        trans_y = tgt_y - r_val
+        lit_flag = 1 if is_lit_right else 0
+        sun_opacity = "0.8" if is_daytime else "0.1"
+        
         celestial_graphics = f"""
-        <circle cx="50" cy="50" r="10" fill="#EF4444" opacity="{"0.8" if is_daytime else "0.1"}" />
-        <g transform="translate({tgt_x-r_val}, {tgt_y-r_val}) scale({r_val/50})" {planet_opacity}>
+        <circle cx="50" cy="50" r="10" fill="#EF4444" opacity="{sun_opacity}" />
+        <g transform="translate({trans_x}, {trans_y}) scale({scale_val})" {planet_opacity}>
             <circle cx="50" cy="50" r="45" fill="{dark_side_color}" stroke="{dark_side_stroke}" {visibility_stroke} />
-            <path d="M 50 5 A 45 45 0 0 {1 if is_lit_right else 0} 50 95 Z" fill="{target_color}" />
+            <path d="M 50 5 A 45 45 0 0 {lit_flag} 50 95 Z" fill="{target_color}" />
             <ellipse cx="50" cy="50" rx="{rx_val}" ry="45" fill="{ellipse_fill}" />
         </g>
         """
@@ -129,7 +132,6 @@ with col1:
         elif 305 <= phase_angle <= 320: pos_status = "서방최대이각 (오른쪽/서쪽 위치, 새벽 동쪽하늘 반달)"
             
     elif "일식" in target_mode or "월식" in target_mode:
-        # 달의 운동에 따른 하늘 위치 매핑 (망일 때 남중 자정 기준 반대 배치)
         tgt_x = 50 - 35 * np.sin(np.radians(phase_angle))
         tgt_y = 50
         target_color = "#FBBF24" if "일식" in target_mode else "#991B1B" if phase_angle == 180 else "#FBBF24"
@@ -144,22 +146,25 @@ with col1:
             celestial_graphics = f'<circle cx="50" cy="50" r="15" fill="none" stroke="#FBBF24" stroke-width="3" />'
             pos_status = "개기일식 (달이 태양을 차폐)"
         else:
+            scale_val = r_val / 50
+            trans_x = tgt_x - r_val
+            trans_y = tgt_y - r_val
+            lit_flag = 1 if is_lit_right else 0
+            
             celestial_graphics = f"""
-            <g transform="translate({tgt_x-r_val}, {tgt_y-r_val}) scale({r_val/50})" {planet_opacity}>
+            <g transform="translate({trans_x}, {trans_y}) scale({scale_val})" {planet_opacity}>
                 <circle cx="50" cy="50" r="45" fill="{dark_side_color}" stroke="{dark_side_stroke}" {visibility_stroke} />
-                <path d="M 50 5 A 45 45 0 0 {1 if is_lit_right else 0} 50 95 Z" fill="{target_color}" />
+                <path d="M 50 5 A 45 45 0 0 {lit_flag} 50 95 Z" fill="{target_color}" />
                 <ellipse cx="50" cy="50" rx="{rx_val}" ry="45" fill="{ellipse_fill}" />
             </g>
             """
             pos_status = "일식/월식 범위 외 일반 달 위상"
             
     else: # 외행성 모드
-        # 외행성은 충일 때 지구와 가장 가까우며 정남향 정중앙에 위치함
         tgt_x = 50 - 35 * np.sin(np.radians(phase_angle))
         tgt_y = 50
         target_color = "#EF4444"
         
-        # 거리에 따른 시직경 변화 계산 적용
         rad_calc = np.radians(90 - phase_angle)
         ex = 50 + 42 * np.cos(rad_calc)
         ey = 50 + 42 * np.sin(rad_calc)
@@ -171,10 +176,16 @@ with col1:
         rx_val = abs(dynamic_r * (2 * ell_ratio - 1))
         ellipse_fill = dark_side_color if ell_ratio > 0.5 else target_color
         
+        # [SyntaxError 완전 해결 핵심] 변수를 f-string 가독 영역 외부에서 먼저 연산 후 문자열 주입
+        scale_val = dynamic_r / 50
+        trans_x = tgt_x - dynamic_r
+        trans_y = tgt_y - dynamic_r
+        lit_flag = 1 if is_lit_right else 0
+        
         celestial_graphics = f"""
-        <g transform="translate({tgt_x-dynamic_r}, {tgt_y-dynamic_r}) scale({dynamic_r}/50})" {planet_opacity}>
+        <g transform="translate({trans_x}, {trans_y}) scale({scale_val})" {planet_opacity}>
             <circle cx="50" cy="50" r="45" fill="{dark_side_color}" stroke="{dark_side_stroke}" {visibility_stroke} />
-            <path d="M 50 5 A 45 45 0 0 {1 if is_lit_right else 0} 50 95 Z" fill="{target_color}" />
+            <path d="M 50 5 A 45 45 0 0 {lit_flag} 50 95 Z" fill="{target_color}" />
             <ellipse cx="50" cy="50" rx="{rx_val}" ry="45" fill="{ellipse_fill}" />
         </g>
         """
@@ -259,7 +270,6 @@ with col2:
 
     st.markdown('<p class="control-label">🔄 공전 각도 정밀 제어 (즉각 연동)</p>', unsafe_allow_html=True)
     
-    # 세션 값을 직접 바인딩하고 가로채는 방식으로 안정적 연동 설계
     st.slider(
         "공전 각도 조절 (°)", min_value=0, max_value=359, 
         value=int(st.session_state.current_phase), 
