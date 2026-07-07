@@ -60,7 +60,7 @@ obs_date = st.sidebar.date_input("관측 날짜 선택", datetime.date.today())
 st.sidebar.markdown("🕒 **관측 시간 선택**")
 time_slots = [f"{h:02d}:{m:02d}" for h in range(24) for m in [0, 30]]
 selected_time_str = st.sidebar.select_slider(
-    "슬라이더를 좌우로 드래그하면 행성들이 실시간으로 회전합니다.",
+    "슬라이더를 좌우로 드래그하면 천체들이 실시간으로 회전합니다.",
     options=time_slots,
     value="22:00"
 )
@@ -74,16 +74,14 @@ show_moon = st.sidebar.checkbox("달 (Moon) 표시", value=True)
 show_inner = st.sidebar.checkbox("내행성 (금성) 표시", value=True)
 show_outer = st.sidebar.checkbox("외행성 (화성) 표시", value=True)
 
-# 💡 [핵심 수정] 시간 변화를 눈으로 볼 수 있도록 가중치 기반 시뮬레이션 타임라인 계산
-# 기본 날짜값에 '선택한 시간 인덱스'를 크게 반영하여 실시간 움직임을 연출합니다.
+# 시뮬레이션 타임라인 계산
 base_days = (obs_date - datetime.date(2026, 1, 1)).days
 time_index = time_slots.index(selected_time_str)
 
-# 날짜에 의한 위치 + 시간에 따른 궤도 회전 속도 가중치 부여
 sim_time_earth = base_days + (time_index * 1.5)
 sim_time_venus = base_days + (time_index * 2.5)
 sim_time_mars = base_days + (time_index * 0.8)
-sim_time_moon = base_days + (time_index * 5.0) # 달은 지구 주변을 빠르게 돌도록 설정
+sim_time_moon = base_days + (time_index * 5.0)
 
 
 # ==========================================
@@ -104,7 +102,7 @@ def plot_solar_system():
     ax.plot(ex, ey, 'ob', markersize=9, label='Earth', color='#4169E1')
     ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)) * 3, np.sin(np.linspace(0, 2*np.pi, 100)) * 3, '--', color='#2D3748', alpha=0.4)
     
-    # 달 (Moon) - 지구를 중심으로 공전
+    # 달 (Moon)
     if show_moon:
         moon_angle = sim_time_moon * (2 * np.pi / 29.5)
         mx, my = ex + np.cos(moon_angle) * 0.5, ey + np.sin(moon_angle) * 0.5
@@ -131,7 +129,7 @@ def plot_solar_system():
     ax.legend(loc='upper right', facecolor='#111622', edgecolor='#2D3748', labelcolor='white', fontsize=12)
     return fig
 
-# [2] 밤하늘 방위별 시야 그래프 (시간 슬라이더에 따라 천체 고도 이동)
+# [2] 밤하늘 방위별 시야 그래프 (필터 버그 수정)
 def plot_sky_view(dir_setting):
     fig, ax = plt.subplots(figsize=(7, 4), facecolor='#06080c')
     ax.set_facecolor('#06080c')
@@ -142,33 +140,34 @@ def plot_sky_view(dir_setting):
     
     text_style = {'color': '#FFFFFF', 'ha': 'center', 'fontsize': 14, 'fontweight': 'bold'}
     
-    # 💡 슬라이더 값(time_index)에 따라 천체가 동에서 서로 움직이도록 위치 좌표에 애니메이션 효과 반영
-    # 시간 인덱스는 0부터 47까지 변하므로 이를 변위로 활용합니다.
+    # 슬라이더 값에 따른 천체 이동 변위
     shift = (time_index - 24) * 0.15 
     
     if "남" in dir_setting:
-        # 시간이 흐를수록 남쪽 하늘의 달과 화성이 서쪽(왼쪽)으로 이동
-        ax.plot(0 - shift, 2.2, 'o', color='#F5F5F5', markersize=20)
-        ax.text(0 - shift, 1.5, "Moon", **text_style)
+        # 💡 달 표시 필터 처리 적용
+        if show_moon:
+            ax.plot(0 - shift, 2.2, 'o', color='#F5F5F5', markersize=20)
+            ax.text(0 - shift, 1.5, "Moon", **text_style)
         if show_outer:
             ax.plot(2.5 - shift, 1.8, 'o', color='#D14949', markersize=12)
             ax.text(2.5 - shift, 1.3, "Mars", **text_style)
             
     elif "동" in dir_setting:
-        # 시간이 흐를수록 새로운 행성(목성)이 지평선 아래에서 위로 떠오름
-        height = 0.2 + (time_index * 0.05)
-        ax.plot(2, height, 'o', color='#DEB887', markersize=16)
-        ax.text(2, height - 0.5, "Jupiter", **text_style)
+        # 외행성(목성) 표시 필터 처리 적용
+        if show_outer:
+            height = 0.2 + (time_index * 0.05)
+            ax.plot(2, height, 'o', color='#DEB887', markersize=16)
+            ax.text(2, height - 0.5, "Jupiter", **text_style)
         
     elif "서" in dir_setting:
-        # 시간이 흐를수록 금성이 지평선 아래로 가라앉음
-        height = 3.0 - (time_index * 0.06)
-        if show_inner and height > 0:
-            ax.plot(-2, height, '*', color='#FFD700', markersize=15)
-            ax.text(-2, height - 0.5, "Venus", **text_style)
+        # 내행성(금성) 표시 필터 처리 적용
+        if show_inner:
+            height = 3.0 - (time_index * 0.06)
+            if height > 0:
+                ax.plot(-2, height, '*', color='#FFD700', markersize=15)
+                ax.text(-2, height - 0.5, "Venus", **text_style)
             
     elif "북" in dir_setting:
-        # 북극성은 고정되어 있고 주위 주극성들이 회전하는 연출
         ax.plot(0, 2.5, '*', color='#63B3ED', markersize=12)
         ax.text(0, 1.9, "Polaris", color='#63B3ED', ha='center', fontsize=14, fontweight='bold')
         
