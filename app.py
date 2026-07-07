@@ -44,8 +44,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🔭 지구과학 I 천체 위치 및 관측 시뮬레이터")
-st.caption("날짜에 따른 행성 위치와 지구 자전(시간)에 따른 지평선 시야를 과학적 원리로 시뮬레이션합니다.")
+st.title("🔭 지구과학 I 천체 관측 시뮬레이터 (태양 영향 반영)")
+st.caption("태양의 위치에 따른 낮과 밤의 변화 및 행성의 상대적 위치 관계를 완벽하게 시뮬레이션합니다.")
 
 # ==========================================
 # 2. 사이드바 제어판 (관측 조건 설정)
@@ -59,7 +59,7 @@ obs_date = st.sidebar.date_input("관측 날짜 선택", datetime.date(2026, 7, 
 st.sidebar.markdown("🕒 **관측 시간 선택 (지구 자전)**")
 time_slots = [f"{h:02d}:{m:02d}" for h in range(24) for m in [0, 30]]
 selected_time_str = st.sidebar.select_slider(
-    "시간을 조절하면 지구 자전축 방향과 관측 시야가 실시간 연동됩니다.",
+    "시간을 조절하면 태양의 고도와 낮/밤 환경이 실시간 연동됩니다.",
     options=time_slots,
     value="22:00"
 )
@@ -76,24 +76,21 @@ show_outer = st.sidebar.checkbox("외행성 (화성) 표시", value=True)
 # ==========================================
 # 3. 과학적 위치 및 각도 계산 (물리/천문 수식)
 # ==========================================
-# 2026년 1월 1일 기준 경과일 계산
 base_days = (obs_date - datetime.date(2026, 1, 1)).days
 hour, minute = map(int, selected_time_str.split(":"))
 time_hours = hour + (minute / 60.0)
 
-# [A] 공전 각도 계산 (태양 기준 절대 각도, 라디안)
-# 실제 공전 주기를 반영하여 날짜에 따른 위치 결정
+# [A] 공전 각도 계산
 earth_orb_ang = base_days * (2 * np.pi / 365.25)
-venus_orb_ang = base_days * (2 * np.pi / 224.7) + 1.2 # 초기 위상 오프셋 부여
+venus_orb_ang = base_days * (2 * np.pi / 224.7) + 1.2
 mars_orb_ang  = base_days * (2 * np.pi / 687.0) + 0.5
-moon_orb_ang  = earth_orb_ang + (base_days * (2 * np.pi / 29.5)) # 지구 기준 공전
+moon_orb_ang  = earth_orb_ang + (base_days * (2 * np.pi / 29.5))
 
-# [B] 지구 자전 각도 계산 (6시: 일출, 12시: 남중, 18시: 일몰, 24시: 한밤중)
-# 태양 방향을 0도(아래쪽 정렬 기준 연산)로 잡고, 시간에 따른 자전각 계산
-# 12시(정오)일 때 태양을 바라봄, 24시(자정)일 때 태양 반대편을 바라봄
+# [B] 지구 자전 각도 계산 (태양 방향 기준 시뮬레이션 정렬)
+# 자전축 중심 관측자 방향 계산
 rotation_angle = earth_orb_ang + np.pi + (time_hours / 24.0) * 2 * np.pi
 
-# 각 천체의 실제 위치 좌표 (태양 중심)
+# 각 천체의 좌표 (태양 중심)
 ex, ey = np.cos(earth_orb_ang) * 3.5, np.sin(earth_orb_ang) * 3.5
 vx, vy = np.cos(venus_orb_ang) * 2.0, np.sin(venus_orb_ang) * 2.0
 mx, my = ex + np.cos(moon_orb_ang) * 0.6, ey + np.sin(moon_orb_ang) * 0.6
@@ -109,14 +106,14 @@ def plot_solar_system():
     fig, ax = plt.subplots(figsize=(6, 6), facecolor='#06080c')
     ax.set_facecolor('#06080c')
     
-    # 궤도선 그리기
+    # 궤도선
     ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)) * 2.0, np.sin(np.linspace(0, 2*np.pi, 100)) * 2.0, '--', color='#2D3748', alpha=0.4)
     ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)) * 3.5, np.sin(np.linspace(0, 2*np.pi, 100)) * 3.5, '--', color='#2D3748', alpha=0.4)
     ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)) * 5.0, np.sin(np.linspace(0, 2*np.pi, 100)) * 5.0, '--', color='#2D3748', alpha=0.4)
     
     # 천체 플로팅
-    ax.plot(0, 0, 'oy', markersize=16, label='Sun', color='#FFD700') # 태양
-    ax.plot(ex, ey, 'ob', markersize=9, label='Earth', color='#4169E1') # 지구
+    ax.plot(0, 0, 'oy', markersize=16, label='Sun', color='#FFD700')
+    ax.plot(ex, ey, 'ob', markersize=9, label='Earth', color='#4169E1')
     
     if show_moon:
         ax.plot(mx, my, 'o', markersize=4, label='Moon', color='#F5F5F5')
@@ -125,8 +122,7 @@ def plot_solar_system():
     if show_outer:
         ax.plot(marx, mary, 'o', markersize=8, label='Mars', color='#D14949')
         
-    # 💡 지구과학 핵심: 현재 관측자의 지평선(시야 방향) 화살표 표시
-    # 자전각(rotation_angle) 방향이 곧 관측자의 '남중(South)' 방향이 됩니다.
+    # 관측자 남쪽 방향 화살표 표시
     arrow_len = 0.8
     ax.arrow(ex, ey, np.cos(rotation_angle)*arrow_len, np.sin(rotation_angle)*arrow_len, 
              head_width=0.15, head_length=0.15, fc='#4FD1C5', ec='#4FD1C5', label='Observer (South)')
@@ -138,75 +134,73 @@ def plot_solar_system():
     return fig
 
 
-# [2] 지평선 기준 관측 시야 그래프 (실제 이각 및 남중고도 원리 연동)
+# [2] 지평선 관측 시야 그래프 (태양 영향 완벽 반영)
 def plot_sky_view(dir_setting):
-    fig, ax = plt.subplots(figsize=(7, 4), facecolor='#06080c')
-    ax.set_facecolor('#06080c')
-    
-    # 지평선 구조
-    ax.axhline(0, color='#4A5568', linewidth=2)
-    ax.fill_between([-10, 10], -2, 0, color='#11141D')
-    
-    text_style = {'color': '#FFFFFF', 'ha': 'center', 'fontsize': 13, 'fontweight': 'bold'}
-    
-    # 지구에서 각 천체를 바라보는 상대 벡터 및 절대 기하 각도 구하기
+    # 지구 기준 천체의 상대 방위각 구하는 함수
     def get_altitude_and_azimuth(target_x, target_y):
-        # 지구 기준 상대 좌표
         rx, ry = target_x - ex, target_y - ey
         target_abs_ang = np.arctan2(ry, rx)
-        
-        # 관측자의 자전 방향(남쪽)과의 각도차(이각 개념 확장) 계산
         ang_diff = target_abs_ang - rotation_angle
-        # 각도를 -pi에서 pi 범위로 정규화
-        ang_diff = (ang_diff + np.pi) % (2 * np.pi) - np.pi
-        
-        # 지평좌표계 매핑: 남쪽을 바라볼 때 ang_diff가 0이면 정중앙(남중)
-        # 서쪽 시야는 남쪽 기준 오른쪽(+), 동쪽 시야는 남쪽 기준 왼쪽(-)
-        return ang_diff
+        return (ang_diff + np.pi) % (2 * np.pi) - np.pi
 
-    # 천체별 남쪽 기준 상대 각도(라디안) 계산
+    # 천체별 각도차 계산
     ang_sun   = get_altitude_and_azimuth(0, 0)
     ang_moon  = get_altitude_and_azimuth(mx, my)
     ang_venus = get_altitude_and_azimuth(vx, vy)
     ang_mars  = get_altitude_and_azimuth(marx, mary)
 
-    # 방위(남, 동, 서, 북) 필터에 따라 지평선 스크린(X축 -4 ~ +4)에 천체 배치
-    # 자전에 의해 천체는 동(왼쪽)에서 떠서 서(오른쪽)로 지는 메커니즘
-    def draw_object(ang, name, color, marker, size, y_pos=1.8):
-        # 바라보는 방위에 맞춰 X축 도메인 필터링
+    # 💡 지구과학 원리: 현재 바라보는 방향에 상관없이 태양이 지평선 위(남/동/서)에 떠있다면 '낮'으로 판정
+    # 태양과의 각도 차이가 대략 90도(pi/2) 이내이면 낮 시간대임
+    is_daytime = (6.0 <= time_hours <= 18.0)
+
+    # 낮이면 밝은 하늘색, 밤이면 깊은 밤하늘색 배경 설정
+    bg_color = '#2B6CB0' if is_daytime else '#06080c'
+    land_color = '#2F855A' if is_daytime else '#11141D'
+    
+    fig, ax = plt.subplots(figsize=(7, 4), facecolor=bg_color)
+    ax.set_facecolor(bg_color)
+    
+    # 지평선 및 땅 그리기
+    ax.axhline(0, color='#4A5568', linewidth=2)
+    ax.fill_between([-10, 10], -2, 0, color=land_color)
+    
+    text_style = {'color': '#FFFFFF', 'ha': 'center', 'fontsize': 13, 'fontweight': 'bold'}
+
+    # 지평선 화면에 천체를 투영하는 함수
+    def draw_object(ang, name, color, marker, size, y_pos=1.8, force_visible=False):
         x_pos = None
-        if "남" in dir_setting:   # 중심이 남쪽 (ang = 0)
+        if "남" in dir_setting:
             if -np.pi/4 <= ang <= np.pi/4: x_pos = -ang * (4 / (np.pi/4))
-        elif "서" in dir_setting: # 중심이 서쪽 (ang = -np.pi/2)
-            # 남쪽 기준 우측 90도 부근
-            offset_ang = ang + np.pi/2
-            offset_ang = (offset_ang + np.pi) % (2 * np.pi) - np.pi
+        elif "서" in dir_setting:
+            offset_ang = (ang + np.pi/2 + np.pi) % (2 * np.pi) - np.pi
             if -np.pi/4 <= offset_ang <= np.pi/4: x_pos = -offset_ang * (4 / (np.pi/4))
-        elif "동" in dir_setting: # 중심이 동쪽 (ang = np.pi/2)
-            # 남쪽 기준 좌측 90도 부근
-            offset_ang = ang - np.pi/2
-            offset_ang = (offset_ang + np.pi) % (2 * np.pi) - np.pi
+        elif "동" in dir_setting:
+            offset_ang = (ang - np.pi/2 + np.pi) % (2 * np.pi) - np.pi
             if -np.pi/4 <= offset_ang <= np.pi/4: x_pos = -offset_ang * (4 / (np.pi/4))
             
-        # 지평선 위에 있을 때만(태양과의 고도 및 밤시간대 체크 시뮬레이션 단순화) 그리기
         if x_pos is not None:
-            ax.plot(x_pos, y_pos, marker, color=color, markersize=size)
-            ax.text(x_pos, y_pos - 0.5, name, **text_style)
+            # 💡 낮에는 태양이 아닌 천체들은 강한 햇빛 때문에 보이지 않거나 흐릿하게 처리 (지구과학적 고증)
+            alpha_val = 1.0 if (not is_daytime or force_visible) else 0.15
+            ax.plot(x_pos, y_pos, marker, color=color, markersize=size, alpha=alpha_val)
+            ax.text(x_pos, y_pos - 0.5, name, alpha=alpha_val, **text_style)
 
-    # 각 천체 렌더링 호출
-    # 태양 고도에 따라 낮밤이 결정되므로, 밤하늘 시야에서는 태양이 지평선 아래에 있을 때만 다른 천체들이 강조됩니다.
+    # 천체 배치 실행
     if "북" in dir_setting:
-        # 북쪽 하늘은 북극성이 고정 배치됨 (지구과학 기본)
-        ax.plot(0, 2.3, '*', color='#63B3ED', markersize=14)
-        ax.text(0, 1.7, "Polaris", color='#63B3ED', ha='center', fontsize=13, fontweight='bold')
+        # 북쪽 하늘의 북극성은 낮에는 안 보이고 밤에만 선명함
+        alpha_polaris = 0.15 if is_daytime else 1.0
+        ax.plot(0, 2.3, '*', color='#63B3ED', markersize=14, alpha=alpha_polaris)
+        ax.text(0, 1.7, "Polaris", color='#63B3ED', ha='center', fontsize=13, fontweight='bold', alpha=alpha_polaris)
     else:
+        # 1. 태양 배치 (강제 표시 항목)
+        draw_object(ang_sun, "SUN", "#FF8C00", "o", 24, y_pos=2.5, force_visible=True)
+        
+        # 2. 필터 적용 천체 배치 (낮 시간대엔 자동으로 투명도 저하)
         if show_moon:
-            draw_object(ang_moon, "Moon", "#F5F5F5", "o", 18, y_pos=2.2)
+            draw_object(ang_moon, "Moon", "#F5F5F5", "o", 18, y_pos=2.0)
         if show_inner:
-            # 금성은 태양 이각이 48도를 넘지 않으므로 서쪽/동쪽 시야 조건에 과학적으로만 배치됨
-            draw_object(ang_venus, "Venus", "#E6C229", "*", 14, y_pos=1.5)
+            draw_object(ang_venus, "Venus", "#E6C229", "*", 14, y_pos=1.3)
         if show_outer:
-            draw_object(ang_mars, "Mars", "#D14949", "o", 11, y_pos=1.9)
+            draw_object(ang_mars, "Mars", "#D14949", "o", 11, y_pos=1.7)
             
     ax.set_xlim(-5, 5)
     ax.set_ylim(-0.5, 4)
@@ -225,7 +219,8 @@ with col1:
     st.pyplot(fig_solar)
 
 with col2:
-    st.subheader(f"🔭 현재 시간 {selected_time_str} / {direction} 하늘 시야")
+    status_tag = "☀️ 낮 (Daytime)" if (6.0 <= time_hours <= 18.0) else "🌙 밤 (Night)"
+    st.subheader(f"🔭 시야 [{status_tag}] : {selected_time_str} / {direction} 하늘")
     fig_sky = plot_sky_view(direction)
     st.pyplot(fig_sky)
 
@@ -234,29 +229,29 @@ with col2:
 # 6. 하단 지구과학 핵심 개념 매칭 가이드
 # ==========================================
 st.markdown("---")
-st.subheader("🎓 지구과학 I 천체 관측 핵심 탐구 가이드")
+st.subheader("🎓 태양의 영향도를 고려한 천체 관측 핵심 탐구")
 
 c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown("""
     <div class="metric-card">
-        <h4>🔄 지구 자전과 시간 (Time & Rotation)</h4>
-        <p>왼쪽 태양계 그래프의 <b>청록색 화살표</b>는 현재 시간 관측자가 서 있는 위치와 남쪽(정면) 하늘 방향을 가리킵니다. 시간이 흐름에 따라 화살표가 반시계 방향으로 자전하는 것을 확인할 수 있습니다.</p>
+        <h4>☀️ 태양 고도와 일주 운동</h4>
+        <p>시간 슬라이더를 06:00(일출)에서 12:00(남중), 18:00(일몰)로 움직여보세요. 동쪽에서 태양이 떠올라 서쪽으로 지며 시야 배경이 파랗게 바뀌는 <b>지구 자전에 의한 태양의 겉보기 운동</b>이 시뮬레이션됩니다.</p>
     </div>
     """, unsafe_allow_html=True)
 
 with c2:
     st.markdown("""
     <div class="metric-card">
-        <h4>📐 내행성의 최대 이각 (Venus Observation)</h4>
-        <p>금성(Venus)은 지구 안쪽 궤도에서 공전하므로 태양과의 이각이 항상 일정 각도 이하로 제한됩니다. 따라서 <b>한밤중(예: 22시~자정)에는 지평선 밑으로 내려가 절대 관측할 수 없으며</b>, 일몰 직후 서쪽 하늘이나 일출 직전 동쪽 하늘에서만 시뮬레이터에 등장하게 설계되었습니다.</p>
+        <h4>🌤️ 낮 시간대 천체 관측의 한계</h4>
+        <p>지구과학 시험 범위인 '천체 관측 가능 조건'을 시뮬레이터에 세팅했습니다. 낮(06시~18시)에는 달과 행성들이 지평선 위에 있더라도 <b>태양 빛의 간섭 때문에 마커가 흐려지거나 보이지 않게 처리</b>됩니다.</p>
     </div>
     """, unsafe_allow_html=True)
 
 with c3:
     st.markdown("""
     <div class="metric-card">
-        <h4>🔴 외행성의 위치 관계 (Mars Observation)</h4>
-        <p>화성(Mars) 같은 외행성은 태양-지구-행성이 일직선이 되는 <b>'충(Opposition)'</b> 부근에 위치할 때, 관측자 화살표가 태양 반대편(한밤중 24시)을 향할 때 정남쪽에 남중하므로 밤새도록 가장 밝고 길게 관측 가능합니다.</p>
+        <h4>🔭 초저녁과 새벽녘의 내행성</h4>
+        <p>금성(Venus) 마커를 켠 뒤 시간을 18:30(일몰 직후)으로 세팅하고 <b>서쪽(West) 하늘</b>을 바라보세요. 태양이 방금 막 지평선 아래로 내려간 뒤, 태양 근처에서 밝게 빛나는 금성의 <b>초저녁 관측 원리</b>를 완벽히 이해할 수 있습니다.</p>
     </div>
     """, unsafe_allow_html=True)
