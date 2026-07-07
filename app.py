@@ -4,33 +4,28 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # ==========================================
-# 1. 페이지 설정 및 가독성 높은 다크 CSS 디자인
+# 1. 페이지 설정 및 고대비 다크 CSS 디자인
 # ==========================================
 st.set_page_config(page_title="우주 천체 관측 시뮬레이터", layout="wide")
 
 st.markdown("""
     <style>
-    /* 전체 배경을 깊은 블랙으로 설정하고 모든 기본 글씨를 완전한 흰색으로 강제 */
     .stApp {
         background-color: #06080c;
         color: #FFFFFF !important;
     }
-    /* 사이드바 스타일 정의 */
     [data-testid="stSidebar"] {
         background-color: #111622;
         border-right: 1px solid #2D3748;
     }
-    /* 사이드바 안의 일반 텍스트들도 전부 완전한 흰색으로 변경 */
     [data-testid="stSidebar"] .stMarkdown p, [data-testid="stSidebar"] label {
         color: #FFFFFF !important;
         font-weight: 600;
     }
-    /* 제목 및 헤더 스타일: 선명한 네온 블루 */
     h1, h2, h3, h4 {
         color: #4FD1C5 !important;
         font-weight: 700;
     }
-    /* 하단 가이드 카드 디자인: 가독성을 위해 밝은 네이비 배경에 흰색 글씨 */
     .metric-card {
         background-color: #171E2E;
         padding: 20px;
@@ -54,20 +49,20 @@ st.title("🌌 천체 위치 및 위상 시뮬레이터")
 st.caption("날짜와 시간을 슬라이더로 조절하며 행성의 위치 관계와 밤하늘 위상을 확인하세요.")
 
 # ==========================================
-# 2. 사이드바 제어판 (슬라이더 방식 적용)
+# 2. 사이드바 제어판
 # ==========================================
 st.sidebar.header("⏰ 관측 설정")
 
 # 날짜 선택
 obs_date = st.sidebar.date_input("관측 날짜 선택", datetime.date.today())
 
-# 시간 선택 (편리한 슬라이더 인터페이스)
+# 시간 선택 (슬라이더 방식)
 st.sidebar.markdown("🕒 **관측 시간 선택**")
 time_slots = [f"{h:02d}:{m:02d}" for h in range(24) for m in [0, 30]]
 selected_time_str = st.sidebar.select_slider(
-    "슬라이더를 좌우로 드래그하여 시간을 조절하세요.",
+    "슬라이더를 좌우로 드래그하면 행성들이 실시간으로 회전합니다.",
     options=time_slots,
-    value="22:00"  # 기본값 밤 10시
+    value="22:00"
 )
 
 # 방위 선택
@@ -79,14 +74,20 @@ show_moon = st.sidebar.checkbox("달 (Moon) 표시", value=True)
 show_inner = st.sidebar.checkbox("내행성 (금성) 표시", value=True)
 show_outer = st.sidebar.checkbox("외행성 (화성) 표시", value=True)
 
-# 시뮬레이션 계산용 시간 변환
-hour, minute = map(int, selected_time_str.split(":"))
-total_hours = hour + (minute / 60.0)
-days = (obs_date - datetime.date(2026, 1, 1)).days + (total_hours / 24.0)
+# 💡 [핵심 수정] 시간 변화를 눈으로 볼 수 있도록 가중치 기반 시뮬레이션 타임라인 계산
+# 기본 날짜값에 '선택한 시간 인덱스'를 크게 반영하여 실시간 움직임을 연출합니다.
+base_days = (obs_date - datetime.date(2026, 1, 1)).days
+time_index = time_slots.index(selected_time_str)
+
+# 날짜에 의한 위치 + 시간에 따른 궤도 회전 속도 가중치 부여
+sim_time_earth = base_days + (time_index * 1.5)
+sim_time_venus = base_days + (time_index * 2.5)
+sim_time_mars = base_days + (time_index * 0.8)
+sim_time_moon = base_days + (time_index * 5.0) # 달은 지구 주변을 빠르게 돌도록 설정
 
 
 # ==========================================
-# 3. 그래프 시각화 (서버에서 절대 안 깨지는 100% 영문 구조)
+# 3. 그래프 시각화 (100% 영문 구조)
 # ==========================================
 
 # [1] 태양계 위치 관계 그래프
@@ -98,27 +99,27 @@ def plot_solar_system():
     ax.plot(0, 0, 'oy', markersize=16, label='Sun', color='#FFD700')
     
     # 지구 (Earth)
-    earth_angle = days * (2 * np.pi / 365)
+    earth_angle = sim_time_earth * (2 * np.pi / 365)
     ex, ey = np.cos(earth_angle) * 3, np.sin(earth_angle) * 3
     ax.plot(ex, ey, 'ob', markersize=9, label='Earth', color='#4169E1')
     ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)) * 3, np.sin(np.linspace(0, 2*np.pi, 100)) * 3, '--', color='#2D3748', alpha=0.4)
     
-    # 달 (Moon)
+    # 달 (Moon) - 지구를 중심으로 공전
     if show_moon:
-        moon_angle = days * (2 * np.pi / 29.5)
+        moon_angle = sim_time_moon * (2 * np.pi / 29.5)
         mx, my = ex + np.cos(moon_angle) * 0.5, ey + np.sin(moon_angle) * 0.5
         ax.plot(mx, my, 'o', markersize=4, label='Moon', color='#F5F5F5')
     
     # 내행성 (Venus)
     if show_inner:
-        v_angle = days * (2 * np.pi / 225)
+        v_angle = sim_time_venus * (2 * np.pi / 225)
         vx, vy = np.cos(v_angle) * 1.8, np.sin(v_angle) * 1.8
         ax.plot(vx, vy, 'o', markersize=7, label='Venus', color='#E6C229')
         ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)) * 1.8, np.sin(np.linspace(0, 2*np.pi, 100)) * 1.8, '--', color='#2D3748', alpha=0.4)
 
     # 외행성 (Mars)
     if show_outer:
-        m_angle = days * (2 * np.pi / 687)
+        m_angle = sim_time_mars * (2 * np.pi / 687)
         mar_x, mar_y = np.cos(m_angle) * 4.5, np.sin(m_angle) * 4.5
         ax.plot(mar_x, mar_y, 'o', markersize=8, label='Mars', color='#D14949')
         ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)) * 4.5, np.sin(np.linspace(0, 2*np.pi, 100)) * 4.5, '--', color='#2D3748', alpha=0.4)
@@ -127,39 +128,55 @@ def plot_solar_system():
     ax.set_ylim(-6, 6)
     ax.axis('off')
     
-    # 범례 설정 (이모지를 지우고 깔끔하게 영문으로만 표기하여 에러 차단)
     ax.legend(loc='upper right', facecolor='#111622', edgecolor='#2D3748', labelcolor='white', fontsize=12)
     return fig
 
-# [2] 밤하늘 방위별 시야 그래프
+# [2] 밤하늘 방위별 시야 그래프 (시간 슬라이더에 따라 천체 고도 이동)
 def plot_sky_view(dir_setting):
     fig, ax = plt.subplots(figsize=(7, 4), facecolor='#06080c')
     ax.set_facecolor('#06080c')
     
-    # 지평선 구조선 및 지면 배치
+    # 지평선 구조선 및 지면
     ax.axhline(0, color='#4A5568', linewidth=2)
     ax.fill_between([-10, 10], -2, 0, color='#11141D')
     
-    # 텍스트 공통 스타일 지정 (글자색은 완전한 흰색)
     text_style = {'color': '#FFFFFF', 'ha': 'center', 'fontsize': 14, 'fontweight': 'bold'}
     
-    # 깨질 수 있는 특수 기호 대신 점(marker)과 영문자로만 오브젝트 배치
+    # 💡 슬라이더 값(time_index)에 따라 천체가 동에서 서로 움직이도록 위치 좌표에 애니메이션 효과 반영
+    # 시간 인덱스는 0부터 47까지 변하므로 이를 변위로 활용합니다.
+    shift = (time_index - 24) * 0.15 
+    
     if "남" in dir_setting:
-        ax.plot(0, 2, 'o', color='#F5F5F5', markersize=20) # 달 표시 대체
-        ax.text(0, 1.3, "Moon", **text_style)
+        # 시간이 흐를수록 남쪽 하늘의 달과 화성이 서쪽(왼쪽)으로 이동
+        ax.plot(0 - shift, 2.2, 'o', color='#F5F5F5', markersize=20)
+        ax.text(0 - shift, 1.5, "Moon", **text_style)
         if show_outer:
-            ax.plot(2.5, 1.8, 'o', color='#D14949', markersize=12) # 화성 표시 대체
-            ax.text(2.5, 1.3, "Mars", **text_style)
+            ax.plot(2.5 - shift, 1.8, 'o', color='#D14949', markersize=12)
+            ax.text(2.5 - shift, 1.3, "Mars", **text_style)
+            
     elif "동" in dir_setting:
-        ax.plot(3, 1.5, 'o', color='#DEB887', markersize=16) # 목성 표시 대체
-        ax.text(3, 0.9, "Jupiter (Rising)", **text_style)
+        # 시간이 흐를수록 새로운 행성(목성)이 지평선 아래에서 위로 떠오름
+        height = 0.2 + (time_index * 0.05)
+        ax.plot(2, height, 'o', color='#DEB887', markersize=16)
+        ax.text(2, height - 0.5, "Jupiter", **text_style)
+        
     elif "서" in dir_setting:
-        if show_inner:
-            ax.plot(-3, 1.2, '*', color='#FFD700', markersize=15) # 금성 표시 대체
-            ax.text(-3, 0.6, "Venus (Setting)", **text_style)
+        # 시간이 흐를수록 금성이 지평선 아래로 가라앉음
+        height = 3.0 - (time_index * 0.06)
+        if show_inner and height > 0:
+            ax.plot(-2, height, '*', color='#FFD700', markersize=15)
+            ax.text(-2, height - 0.5, "Venus", **text_style)
+            
     elif "북" in dir_setting:
-        ax.plot(0, 2.5, '*', color='#63B3ED', markersize=12) # 북극성 표시 대체
+        # 북극성은 고정되어 있고 주위 주극성들이 회전하는 연출
+        ax.plot(0, 2.5, '*', color='#63B3ED', markersize=12)
         ax.text(0, 1.9, "Polaris", color='#63B3ED', ha='center', fontsize=14, fontweight='bold')
+        
+        # 북두칠성 대용 지표성 회전 연출
+        rot_angle = time_index * (2 * np.pi / 48)
+        rx, ry = np.cos(rot_angle) * 1.5, 2.5 + np.sin(rot_angle) * 1.5
+        ax.plot(rx, ry, 'o', color='#FFFFFF', markersize=5)
+        ax.text(rx, ry - 0.3, "Star", color='#A0AEC0', ha='center', fontsize=10)
         
     ax.set_xlim(-5, 5)
     ax.set_ylim(-0.5, 4)
@@ -184,7 +201,7 @@ with col2:
 
 
 # ==========================================
-# 5. 하단 텍스트 설명 카드 (선명한 흰색 가독성)
+# 5. 하단 텍스트 설명 카드
 # ==========================================
 st.markdown("---")
 st.subheader("🪐 천체별 관측 특징 요약")
