@@ -22,41 +22,24 @@ st.markdown("""
     }
     .main-header {
         font-family: 'Space Grotesk', 'Pretendard', sans-serif;
-        font-size: 2.2rem;
-        font-weight: 700;
+        font-size: 2.2rem; font-weight: 700;
         background: linear-gradient(135deg, #6366F1 0%, #38BDF8 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         margin-bottom: 0.2rem;
     }
-    .sub-header {
-        color: #484F58;
-        font-size: 0.95rem;
-        margin-bottom: 1.8rem;
-    }
+    .sub-header { color: #484F58; font-size: 0.95rem; margin-bottom: 1.8rem; }
     .status-pill {
-        display: inline-block;
-        padding: 6px 14px;
-        border-radius: 30px;
-        font-size: 0.85rem;
-        font-weight: 600;
-        background: rgba(56, 189, 248, 0.1);
-        color: #58A6FF;
-        border: 1px solid rgba(56, 189, 248, 0.2);
+        display: inline-block; padding: 6px 14px; border-radius: 30px;
+        font-size: 0.85rem; font-weight: 600;
+        background: rgba(56, 189, 248, 0.1); color: #58A6FF; border: 1px solid rgba(56, 189, 248, 0.2);
     }
-    .control-label {
-        font-size: 0.9rem;
-        color: #8B949E;
-        font-weight: 600;
-        margin-bottom: 8px;
-        margin-top: 5px;
-    }
+    .control-label { font-size: 0.9rem; color: #8B949E; font-weight: 600; margin: 8px 0; }
 </style>
 """, unsafe_allow_html=True)
 
 # 2. 세션 상태 데이터 초기화
 if "current_hour" not in st.session_state:
-    st.session_state.current_hour = 18  # 초저녁(18시) 관측 시점이 내행성의 핵심이므로 기본값 설정
+    st.session_state.current_hour = 18  # 초저녁(18시) 기본값
 if "current_phase" not in st.session_state:
     st.session_state.current_phase = 47 # 초기 위치: 동방최대이각(47°)
 
@@ -71,22 +54,19 @@ target_mode = st.sidebar.selectbox(
 
 direction = st.sidebar.radio("2. 바라보는 방위 선택", ["동 (East)", "서 (West)", "남 (South)", "북 (North)"], index=1)
 
-# 4. 정밀 기하 천문 수식 연산 (북극 상공 시점: 지구 6시 방향, 반시계 자전/공전 시스템)
-# 지구 자전 각도 계산 (12시=태양 정면/위쪽 방향, 18시=오른쪽/초저녁, 0시=아래쪽/자정, 6시=왼쪽/새벽)
+# 4. 정밀 기하 천문 수식 연산 (지구 6시 고정, 반시계 자전 및 공전)
 rotation_angle = ((st.session_state.current_hour - 12) / 12) * np.pi 
 
 sun_x, sun_y = 50, 50      
 earth_x, earth_y = 50, 80  
 
-# 지구상의 관측자 시선 화살표 끝점 계산 (초저녁 18시에는 오른쪽 지평선을 바라봄)
 pointer_x = earth_x + 12 * np.sin(rotation_angle)
 pointer_y = earth_y - 12 * np.cos(rotation_angle)
 
-# 하늘 배경 그라데이션 제어 (밤/낮 환경 동기화)
-if st.session_state.current_hour < 6 or st.session_state.current_hour > 18:
-    sky_gradient = "linear-gradient(180deg, #090D16 0%, #0F1420 100%)"
-else:
+if 6 <= st.session_state.current_hour <= 18:
     sky_gradient = "linear-gradient(180deg, #1D4ED8 0%, #3B82F6 100%)"
+else:
+    sky_gradient = "linear-gradient(180deg, #090D16 0%, #0F1420 100%)"
 
 # 5. 메인 대시보드 렌더링
 st.markdown('<p class="main-header">Cosmic Orbital Diagnostics</p>', unsafe_allow_html=True)
@@ -106,32 +86,27 @@ with col1:
         target_color = "#FB923C"
         phase_angle = st.session_state.current_phase % 360
         
-        # [교정 핵심 수학] 동방구역(0~180)은 상현달 계열(오른쪽 면 밝음), 서방구역(180~360)은 하현달 계열(왼쪽 면 밝음)
+        # PPT 기준 위상 수학 연산 (동방구역=우반달/초승, 서방구역=좌반달/그믐)
         phase_ratio = (1 + np.cos(np.radians(phase_angle))) / 2
         is_lit_right = (phase_angle < 180) 
         rx_val = abs(45 * (2 * phase_ratio - 1))
-        
-        # 기본 마스크 돔 드로잉
-        fill_color = "#1A1F2C"
-        ellipse_fill = fill_color if phase_ratio > 0.5 else target_color
+        ellipse_fill = "#1A1F2C" if phase_ratio > 0.5 else target_color
         
         celestial_graphics = f"""
-        <circle cx="50" cy="50" r="45" fill="{fill_color}" />
+        <circle cx="50" cy="50" r="45" fill="#1A1F2C" />
         <path d="M 50 5 A 45 45 0 0 {1 if is_lit_right else 0} 50 95 Z" fill="{target_color}" />
         <ellipse cx="50" cy="50" rx="{rx_val}" ry="45" fill="{ellipse_fill}" />
         """
-        
-        # 고유 위치별 예외 상태창 동기화
         if phase_angle == 0:
             pos_status = "내합 (시직경 최대, 관찰 불가/삭)"
-            celestial_graphics = f'<circle cx="50" cy="50" r="45" fill="{fill_color}" stroke="rgba(255,255,255,0.1)"/>'
+            celestial_graphics = '<circle cx="50" cy="50" r="45" fill="#1A1F2C" stroke="rgba(255,255,255,0.1)"/>'
         elif phase_angle == 180:
             pos_status = "외합 (시직경 최소, 관찰 불가/망)"
             celestial_graphics = f'<circle cx="50" cy="50" r="45" fill="{target_color}"/>'
         elif 40 <= phase_angle <= 50:
-            pos_status = "동방최대이각 (초저녁 서쪽하늘 관측, 오른쪽 반달/상현형)"
+            pos_status = "동방최대이각 (초저녁 서쪽하늘, 오른쪽 반달)"
         elif 310 <= phase_angle <= 320:
-            pos_status = "서방최대이각 (새벽 동쪽하늘 관측, 왼쪽 반달/하현형)"
+            pos_status = "서방최대이각 (새벽 동쪽하늘, 왼쪽 반달)"
             
     elif "일식과 월식" in target_mode:
         target_color = "#FBBF24"
@@ -148,17 +123,17 @@ with col1:
         """
         if p_ang == 0:
             celestial_graphics = '<circle cx="50" cy="50" r="45" fill="none" stroke="#FBBF24" stroke-width="2.5"/><circle cx="50" cy="50" r="44.5" fill="#05070A" />'
-            pos_status = "개기일식 (삭 위상 정렬)"
+            pos_status = "개기일식 (삭)"
         elif p_ang == 180:
             celestial_graphics = '<circle cx="50" cy="50" r="45" fill="#991B1B"/>'
-            pos_status = "개기월식 (망 위상 정렬)"
-        elif p_ang == 90: pos_status = "상현달 (오른쪽 반달)"
-        elif p_ang == 270: pos_status = "하현달 (왼쪽 반달)"
+            pos_status = "개기월식 (망)"
+        elif p_ang == 90: pos_status = "상현달 (우반달)"
+        elif p_ang == 270: pos_status = "하현달 (좌반달)"
     else:
         target_color = "#EF4444"
         celestial_graphics = f'<circle cx="50" cy="50" r="45" fill="{target_color}"/>'
-        if st.session_state.current_phase == 0: pos_status = "충 (화성 자정 남중, 시직경 최대, 역행)"
-        elif st.session_state.current_phase == 180: pos_status = "합 (태양 뒤편 배치, 관측 불가)"
+        if st.session_state.current_phase == 0: pos_status = "충 (자정 남중, 시직경 최대)"
+        elif st.session_state.current_phase == 180: pos_status = "합 (관측 불가)"
 
     sky_html = f"""
     <div style="background:{sky_gradient}; border-radius:12px; padding:35px; text-align:center;">
@@ -169,7 +144,7 @@ with col1:
     """
     components.html(sky_html, height=310)
     
-    st.markdown('<p class="control-label">⏰ 관측 시각 제어 (지구 자전 메커니즘)</p>', unsafe_allow_html=True)
+    st.markdown('<p class="control-label">⏰ 관측 시각 제어 (지구 자전 제어)</p>', unsafe_allow_html=True)
     t_col1, t_col2, t_col3 = st.columns([1, 1, 2])
     with t_col1:
         if st.button("⏰ -1시간", key="time_dec"):
@@ -191,8 +166,7 @@ with col2:
     shadow_overlay = ""
     if "내행성" in target_mode:
         orbit_radius = 16
-        # [기하 구조 교정] 지구(6시 방향)에서 태양(중앙)을 향하는 시선 기준 시계방향 오프셋 처리 연산 수정
-        # 동방구역(오른쪽 대각선 아래)이 각도 증가 방향이 되도록 삼각함수 위상 정렬 완료
+        # [교정] 태양 기준 오른쪽이 동방최대이각(47°), 왼쪽이 서방최대이각(313°) 구조 동기화
         rad = np.radians(90 - st.session_state.current_phase)
         obj_x = sun_x + orbit_radius * np.cos(rad)
         obj_y = sun_y + orbit_radius * np.sin(rad)
@@ -260,4 +234,21 @@ with col2:
 
 # 6. 하단 교과 원리 가이드 리포트
 st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-st.markdown("<h3 style='font-size:1.1rem; font-weight:600; color:#8B949E;
+st.markdown("<h3 style='font-size:1.1rem; font-weight:600; color:#8B949E; margin-bottom:12px;'>📘 지구과학I 천체 파트 교과 기하 원리 가이드</h3>", unsafe_allow_html=True)
+
+if "내행성" in target_mode:
+    st.markdown("""
+    * **동방최대이각 (47° 부근):** 태양-지구 기준 우측에 위치하며, 지구가 자전할 때 태양이 서쪽으로 진 직후 서쪽 하늘에서 **오른쪽 반달(상현 모양)**로 관측됩니다.
+    * **내합 (0°):** 지구와 태양 사이에 위치하여 거리는 가장 가깝지만, 태양빛을 받지 못하는 면을 보게 되므로 **삭** 위상이 되어 관측이 불가능합니다.
+    * **서방최대이각 (313° 부근):** 태양-지구 기준 좌측에 위치하며, 새벽에 태양이 뜨기 전 동쪽 하늘에서 **왼쪽 반달(하현 모양)**로 관측됩니다.
+    """)
+elif "일식과 월식" in target_mode:
+    st.markdown("""
+    * **일식(Solar Eclipse):** 달이 태양과 지구 사이인 **삭(0°)** 정렬에 위치할 때 성립하며, 태양이 완전히 가려지는 개기일식 등이 일어납니다.
+    * **월식(Lunar Eclipse):** 달이 지구 본그림자 영역 속으로 진입하는 **망(180°)** 정렬일 때 성립하며, 적갈색의 블러드문 형태로 관측됩니다.
+    """)
+else:
+    st.markdown("""
+    * **외행성의 운동:** 행성이 지구-태양 일직선 바깥쪽인 **충(0°)** 위치에 올 때 지구와 가장 가까워 시직경이 최대가 되며, 자정(24시)에 남중하여 한밤중에 가장 오래 관측됩니다.
+    """)
+st.markdown('</div>', unsafe_allow_html=True)
