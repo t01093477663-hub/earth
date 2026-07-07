@@ -71,7 +71,7 @@ target_mode = st.sidebar.selectbox(
 
 direction = st.sidebar.radio("2. 바라보는 방위 선택", ["동 (East)", "서 (West)", "남 (South)", "북 (North)"], index=1)
 
-# 4. 정밀 기하 천문 수식 연산 (지구 6시 방향 고정, 반시계 공전 기준)
+# 4. 정밀 기하 천문 수식 연산 (반시계 공전 기준)
 rotation_angle = ((st.session_state.current_hour - 12) / 12) * np.pi 
 alpha = (st.session_state.current_phase / 180) * np.pi
 
@@ -99,12 +99,13 @@ with col1:
     
     pos_status = "정상 위상 관계"
     target_color = "#F59E0B"
+    celestial_graphics = ""
     
     if "내행성" in target_mode:
         target_color = "#FB923C"
         phase_angle = st.session_state.current_phase
         
-        # [오류 교정] 동방구역(0~180)은 상현달(우반달), 서방구역(180~360)은 하현달(좌반달)
+        # PPT 기준 위상 음영 기하 연산 (동방구역=우반달/초승, 서방구역=좌반달/그믐)
         phase_ratio = (1 + np.cos(np.radians(phase_angle))) / 2
         is_lit_right = (phase_angle < 180) 
         rx_val = abs(45 * (2 * phase_ratio - 1))
@@ -154,7 +155,7 @@ with col1:
     sky_html = f"""
     <div style="background:{sky_gradient}; border-radius:12px; padding:35px; text-align:center;">
         <div style="color:#C9D1D9; font-weight:600; margin-bottom:20px; font-size:1rem;">{st.session_state.current_hour:02d}:00 | {direction}쪽 하늘 시야</div>
-        <svg width="140" height="140" viewBox="0 0 100 100">{sky_html_inner := celestial_graphics}</svg>
+        <svg width="140" height="140" viewBox="0 0 100 100">{celestial_graphics}</svg>
         <div style="margin-top:20px;"><span class="status-pill">{pos_status}</span></div>
     </div>
     """
@@ -182,7 +183,6 @@ with col2:
     shadow_overlay = ""
     if "내행성" in target_mode:
         orbit_radius = 16
-        # [오류 교정] 지구에서 볼 때 오른쪽이 동방최대이각(47°), 왼쪽이 서방최대이각(313°) 기하 구조 완전 매핑
         rad = np.radians(-90 + st.session_state.current_phase)
         obj_x = sun_x + orbit_radius * np.cos(rad)
         obj_y = sun_y + orbit_radius * np.sin(rad)
