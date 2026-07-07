@@ -71,7 +71,7 @@ target_mode = st.sidebar.selectbox(
 
 direction = st.sidebar.radio("2. 바라보는 방위 선택", ["동 (East)", "서 (West)", "남 (South)", "북 (North)"], index=1)
 
-# 4. 정밀 기하 천문 수식 연산 (반시계 공전 기준)
+# 4. 정밀 기하 천문 수식 연산 (반시계 공전 구조 반영)
 rotation_angle = ((st.session_state.current_hour - 12) / 12) * np.pi 
 alpha = (st.session_state.current_phase / 180) * np.pi
 
@@ -105,7 +105,7 @@ with col1:
         target_color = "#FB923C"
         phase_angle = st.session_state.current_phase
         
-        # PPT 기준 위상 음영 기하 연산 (동방구역=우반달/초승, 서방구역=좌반달/그믐)
+        # 동방구역(0~180)은 상현달(우반달), 서방구역(180~360)은 하현달(좌반달) 위상 매핑
         phase_ratio = (1 + np.cos(np.radians(phase_angle))) / 2
         is_lit_right = (phase_angle < 180) 
         rx_val = abs(45 * (2 * phase_ratio - 1))
@@ -208,7 +208,7 @@ with col2:
             <circle cx="{sun_x}" cy="{sun_y}" r="5" fill="#EA580C" />
             <circle cx="{earth_x if "일식" in target_mode else sun_x}" cy="{earth_y if "일식" in target_mode else sun_y}" r="{orbit_radius}" fill="none" stroke="#21262D" stroke-width="0.4" stroke-dasharray="1.5" />
             <circle cx="{earth_x}" cy="{earth_y}" r="4" fill="#2563EB" />
-            <path d="M {earth_x-4} {earth_y} A 4 4 0 0 0 {earth_x+4} {earth_y} Z" fill="#05070A" />
+            <path d="M 50 80 A 4 4 0 0 0 54 80 Z" fill="#05070A" />
             <line x1="{earth_x}" y1="{earth_y}" x2="{pointer_x}" y2="{pointer_y}" stroke="#10B981" stroke-width="0.8" marker-end="url(#arrow)" />
             <circle cx="{obj_x}" cy="{obj_y}" r="2.5" fill="{obj_color}" />
             <defs><marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#10B981"/></marker></defs>
@@ -257,7 +257,7 @@ if "내행성" in target_mode:
     * **동방최대이각 (47° 부근):** 북극 상공 시점에서 지구-태양 연결선 기준 **오른쪽**에 위치합니다. 지구가 반시계로 자전하며 저녁이 될 때, 태양이 서쪽으로 지고 난 후 여전히 왼쪽(동쪽 방향) 천구에 남아있어 **초저녁 서쪽 하늘**에서 **오른쪽 반달(상현 모양)**로 관측됩니다.
     * **내합 (0°):** 행성이 지구와 태양 사이에 정렬하는 위치입니다. 시직경은 가장 크지만 햇빛을 받지 못하는 등면을 보게 되므로 **삭(그믐)** 위상이 되어 관측이 불가능합니다.
     * **서방최대이각 (313° 부근):** 북극 상공 시점에서 지구-태양 연결선 기준 **왼쪽**에 위치합니다. 새벽에 태양이 동쪽에서 뜨기 전 오른쪽(서쪽 방향) 천구에 미리 떠올라 있으므로 **새벽 동쪽 하늘**에서 **왼쪽 반달(하현 모양)**로 관측됩니다.
-    * **외합 (180°):** 행성이 태양 너머 반대편에 위치하는 시점입니다. 위상은 망(보름)에 가깝고 시직경은 최소가 되며, 태양과 같은 방향에 있어 관측되지 않습니다.
+    * **외합 (180°):** 행성이 태양 너머 반대편에 위치하는 시점입니다. 위상은 망(보름)에 가깝고 시직경은 최소가 되며, 태양와 같은 방향에 있어 관측되지 않습니다.
     """)
 elif "일식과 월식" in target_mode:
     st.markdown("""
