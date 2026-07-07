@@ -37,13 +37,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 2. 세션 상태 데이터 초기화
+# 2. 세션 상태 데이터 초기화 및 슬라이더 버그 방지 고정
 if "current_hour" not in st.session_state:
     st.session_state.current_hour = 18  # 초저녁(18시) 기본값
 if "current_phase" not in st.session_state:
     st.session_state.current_phase = 47 # 초기 위치 기본값 (동방최대이각)
 
-# [버그 킬러] 슬라이더 조작 즉시 세션 상태를 안전하게 동기화하는 콜백 함수
+# 슬라이더 조작 시 세션 상태 즉시 동기화 콜백
 def update_phase_from_slider():
     st.session_state.current_phase = st.session_state.slider_val
 
@@ -56,9 +56,9 @@ target_mode = st.sidebar.selectbox(
     ["내행성의 운동 (금성)", "일식 (달의 운동)", "월식 (달의 운동)", "외행성의 운동 (화성)"]
 )
 
-direction = st.sidebar.radio("2. 바라보는 방위 선택", ["동 (East)", "서 (West)", "남 (South)", "북 (North)"], index=1)
+direction = st.sidebar.radio("2. 바라보는 방위 선택", ["동 (East)", "서 (West)", "남 (South)", "북 (North)"], index=2) # 기본값 남쪽
 
-# 4. 정밀 기하 천문 수식 연산 (북극 상공 시점: 지구 6시 방향, 반시계 구조)
+# 4. 정밀 기하 천문 수식 연산 (북극 상공 시점)
 rotation_angle = ((st.session_state.current_hour - 12) / 12) * np.pi 
 
 sun_x, sun_y = 50, 50      
@@ -68,11 +68,12 @@ earth_x, earth_y = 50, 80
 pointer_x = earth_x + 12 * np.sin(rotation_angle)
 pointer_y = earth_y - 12 * np.cos(rotation_angle)
 
-# 낮과 밤에 따른 하늘 배경색 결정
-if 6 <= st.session_state.current_hour <= 18:
-    sky_gradient = "linear-gradient(180deg, #1D4ED8 0%, #3B82F6 100%)"
+# 낮과 밤 판정 (06시~18시 사이는 낮, 그 외는 밤)
+is_daytime = 6 <= st.session_state.current_hour < 18
+if is_daytime:
+    sky_gradient = "linear-gradient(180deg, #1E40AF 0%, #3B82F6 100%)" # 푸른 낮 하늘
 else:
-    sky_gradient = "linear-gradient(180deg, #090D16 0%, #0F1420 100%)"
+    sky_gradient = "linear-gradient(180deg, #05070A 0%, #0F1420 100%)" # 어두운 밤 하늘
 
 # 5. 메인 대시보드 렌더링
 st.markdown('<p class="main-header">Cosmic Orbital Diagnostics</p>', unsafe_allow_html=True)
@@ -80,7 +81,7 @@ st.markdown('<p class="sub-header">지구과학I 천체 기하학·위상 변화
 
 col1, col2 = st.columns([1, 1])
 
-# --- [좌측 카드] 지구 관측 시점 위상 그래픽 (Sky View) ---
+# --- [좌측 카드] 지구 관측 시점 위상 및 하늘 위치 그래픽 (Sky View) ---
 with col1:
     st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
     st.markdown("<h3 style='font-size:1.1rem; font-weight:600; color:#8B949E; margin-bottom:15px;'>👀 지구 관측 시점 (Sky View)</h3>", unsafe_allow_html=True)
@@ -93,96 +94,108 @@ with col1:
     
     phase_angle = st.session_state.current_phase % 360
     
+    # 낮일 때는 점선 스타일 유도, 밤일 때는 실선 구조
+    visibility_stroke = "stroke-dasharray='3,3' opacity='0.4'" if is_daytime else "stroke-width='1'"
+    planet_opacity = "opacity='0.3'" if is_daytime else "opacity='1'"
+    
+    # [방위 위치 계산 연산] 남쪽 하늘 기준: 동쪽이 왼쪽(X=20), 서쪽이 오른쪽(X=80)
+    # 공전 각도(phase_angle)에 따라 가로 위치(tgt_x)를 동적 매핑
     if "내행성" in target_mode:
+        # 내행성은 태양 주변(중앙 X=50)에서 겉보기 왕복 운동을 함
+        # 동방최대이각(47도 부근)일 때 실제로 관측 시선상 태양의 '왼쪽(동쪽)'에 위치하게 됨
+        tgt_x = 50 - 30 * np.sin(np.radians(phase_angle)) 
+        tgt_y = 50 
+        
         target_color = "#FB923C"
-        # [방위 교정] 우측(0~180도)이 동방구역(오른쪽이 밝음), 좌측(180~360도)이 서방구역(왼쪽이 밝음)
         phase_ratio = (1 + np.cos(np.radians(phase_angle))) / 2
         is_lit_right = (phase_angle < 180) 
-        rx_val = abs(45 * (2 * phase_ratio - 1))
+        
+        # 실제 천체 모양 스케일링
+        r_val = 15
+        rx_val = abs(r_val * (2 * phase_ratio - 1))
         ellipse_fill = dark_side_color if phase_ratio > 0.5 else target_color
         
         celestial_graphics = f"""
-        <circle cx="50" cy="50" r="45" fill="{dark_side_color}" stroke="{dark_side_stroke}" stroke-width="1" />
-        <path d="M 50 5 A 45 45 0 0 {1 if is_lit_right else 0} 50 95 Z" fill="{target_color}" />
-        <ellipse cx="50" cy="50" rx="{rx_val}" ry="45" fill="{ellipse_fill}" />
+        <circle cx="50" cy="50" r="10" fill="#EF4444" opacity="{"0.8" if is_daytime else "0.1"}" />
+        <g transform="translate({tgt_x-r_val}, {tgt_y-r_val}) scale({r_val/50})" {planet_opacity}>
+            <circle cx="50" cy="50" r="45" fill="{dark_side_color}" stroke="{dark_side_stroke}" {visibility_stroke} />
+            <path d="M 50 5 A 45 45 0 0 {1 if is_lit_right else 0} 50 95 Z" fill="{target_color}" />
+            <ellipse cx="50" cy="50" rx="{rx_val}" ry="45" fill="{ellipse_fill}" />
+        </g>
         """
-        if phase_angle == 0:
-            pos_status = "내합 (시직경 최대, 관찰 불가/삭)"
-        elif phase_angle == 180:
-            pos_status = "외합 (시직경 최소, 관찰 불가/망)"
-        elif 40 <= phase_angle <= 55:
-            pos_status = "동방최대이각 (초저녁 서쪽하늘, 오른쪽 반달)"
-        elif 305 <= phase_angle <= 320:
-            pos_status = "서방최대이각 (새벽 동쪽하늘, 왼쪽 반달)"
+        if phase_angle == 0: pos_status = "내합 (태양과 겹침, 관찰 불가)"
+        elif phase_angle == 180: pos_status = "외합 (태양 뒤편, 관찰 불가)"
+        elif 40 <= phase_angle <= 55: pos_status = "동방최대이각 (왼쪽/동쪽 위치, 초저녁 서쪽하늘 반달)"
+        elif 305 <= phase_angle <= 320: pos_status = "서방최대이각 (오른쪽/서쪽 위치, 새벽 동쪽하늘 반달)"
             
-    elif "일식" in target_mode:
-        target_color = "#FBBF24"
+    elif "일식" in target_mode or "월식" in target_mode:
+        # 달의 운동에 따른 하늘 위치 매핑 (망일 때 남중 자정 기준 반대 배치)
+        tgt_x = 50 - 35 * np.sin(np.radians(phase_angle))
+        tgt_y = 50
+        target_color = "#FBBF24" if "일식" in target_mode else "#991B1B" if phase_angle == 180 else "#FBBF24"
+        
+        r_val = 14
         phase_ratio = (1 - np.cos(np.radians(phase_angle))) / 2
         is_lit_right = (phase_angle < 180)
-        rx_val = abs(45 * (2 * phase_ratio - 1))
+        rx_val = abs(r_val * (2 * phase_ratio - 1))
         ellipse_fill = dark_side_color if phase_ratio < 0.5 else target_color
         
-        if phase_angle == 0:
-            celestial_graphics = '<circle cx="50" cy="50" r="45" fill="none" stroke="#FBBF24" stroke-width="3"/><circle cx="50" cy="50" r="44.5" fill="#05070A" />'
-            pos_status = "개기일식 현상 발생 (달이 태양을 완전히 가림)"
+        if "일식" in target_mode and phase_angle == 0:
+            celestial_graphics = f'<circle cx="50" cy="50" r="15" fill="none" stroke="#FBBF24" stroke-width="3" />'
+            pos_status = "개기일식 (달이 태양을 차폐)"
         else:
             celestial_graphics = f"""
-            <circle cx="50" cy="50" r="45" fill="{dark_side_color}" stroke="{dark_side_stroke}" stroke-width="1" />
-            <path d="M 50 5 A 45 45 0 0 {1 if is_lit_right else 0} 50 95 Z" fill="{target_color}" />
-            <ellipse cx="50" cy="50" rx="{rx_val}" ry="45" fill="{ellipse_fill}" />
+            <g transform="translate({tgt_x-r_val}, {tgt_y-r_val}) scale({r_val/50})" {planet_opacity}>
+                <circle cx="50" cy="50" r="45" fill="{dark_side_color}" stroke="{dark_side_stroke}" {visibility_stroke} />
+                <path d="M 50 5 A 45 45 0 0 {1 if is_lit_right else 0} 50 95 Z" fill="{target_color}" />
+                <ellipse cx="50" cy="50" rx="{rx_val}" ry="45" fill="{ellipse_fill}" />
+            </g>
             """
-            pos_status = "일식 범위 외 (달의 일반 위상 상태)"
-
-    elif "월식" in target_mode:
-        target_color = "#FBBF24"
-        if phase_angle == 180:
-            celestial_graphics = '<circle cx="50" cy="50" r="45" fill="#991B1B" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>'
-            pos_status = "개기월식 현상 발생 (지구 본그림자 진입 / 블러드문)"
-        else:
-            phase_ratio = (1 - np.cos(np.radians(phase_angle))) / 2
-            is_lit_right = (phase_angle < 180)
-            rx_val = abs(45 * (2 * phase_ratio - 1))
-            ellipse_fill = dark_side_color if phase_ratio < 0.5 else target_color
-            celestial_graphics = f"""
-            <circle cx="50" cy="50" r="45" fill="{dark_side_color}" stroke="{dark_side_stroke}" stroke-width="1" />
-            <path d="M 50 5 A 45 45 0 0 {1 if is_lit_right else 0} 50 95 Z" fill="{target_color}" />
-            <ellipse cx="50" cy="50" rx="{rx_val}" ry="45" fill="{ellipse_fill}" />
-            """
-            pos_status = "월식 범위 외 (달의 일반 위상 상태)"
+            pos_status = "일식/월식 범위 외 일반 달 위상"
             
     else: # 외행성 모드
+        # 외행성은 충일 때 지구와 가장 가까우며 정남향 정중앙에 위치함
+        tgt_x = 50 - 35 * np.sin(np.radians(phase_angle))
+        tgt_y = 50
         target_color = "#EF4444"
         
-        # 지구(50,80), 태양(50,50), 외행성(반지름 42) 사이의 거리 연산에 따른 동적 크기 매핑
+        # 거리에 따른 시직경 변화 계산 적용
         rad_calc = np.radians(90 - phase_angle)
         ex = 50 + 42 * np.cos(rad_calc)
         ey = 50 + 42 * np.sin(rad_calc)
         dist_to_earth = np.sqrt((ex - 50)**2 + (ey - 80)**2)
+        dynamic_r = 12 + (22 - 12) * (1.0 - (dist_to_earth - 12) / 60)
         
-        # 충(지구와 최소거리 12) -> 크기 최대(45) / 합(지구와 최대거리 72) -> 크기 최소(18)
-        dynamic_r = 18 + (45 - 18) * (1.0 - (dist_to_earth - 12) / 60)
-        
-        # 외행성의 미세한 차구 위상 변화율 연산 (동구/서구 영역에서 미세하게 위상이 깎임)
         ell_ratio = 0.88 + 0.12 * abs(np.cos(np.radians(phase_angle)))
         is_lit_right = (phase_angle < 180)
         rx_val = abs(dynamic_r * (2 * ell_ratio - 1))
         ellipse_fill = dark_side_color if ell_ratio > 0.5 else target_color
         
         celestial_graphics = f"""
-        <circle cx="50" cy="50" r="{dynamic_r}" fill="{dark_side_color}" stroke="{dark_side_stroke}" stroke-width="1" />
-        <path d="M 50 {50-dynamic_r} A {dynamic_r} {dynamic_r} 0 0 {1 if is_lit_right else 0} 50 {50+dynamic_r} Z" fill="{target_color}" />
-        <ellipse cx="50" cy="50" rx="{rx_val}" ry="{dynamic_r}" fill="{ellipse_fill}" />
+        <g transform="translate({tgt_x-dynamic_r}, {tgt_y-dynamic_r}) scale({dynamic_r}/50})" {planet_opacity}>
+            <circle cx="50" cy="50" r="45" fill="{dark_side_color}" stroke="{dark_side_stroke}" {visibility_stroke} />
+            <path d="M 50 5 A 45 45 0 0 {1 if is_lit_right else 0} 50 95 Z" fill="{target_color}" />
+            <ellipse cx="50" cy="50" rx="{rx_val}" ry="45" fill="{ellipse_fill}" />
+        </g>
         """
-        if phase_angle == 0: pos_status = "충 (자정 남중, 시직경 최대 보름달 모양)"
-        elif phase_angle == 90: pos_status = "동구 (초저녁 남중, 좌측이 미세하게 깎임)"
-        elif phase_angle == 180: pos_status = "합 (관측 불가, 시직경 최소 보름달 모양)"
-        elif phase_angle == 270: pos_status = "서구 (새벽 남중, 우측이 미세하게 깎임)"
+        if phase_angle == 0: pos_status = "충 (정중앙 위치, 자정 남중 보름달 모양)"
+        elif phase_angle == 90: pos_status = "동구 (왼쪽/동쪽 위치, 초저녁 남중)"
+        elif phase_angle == 180: pos_status = "합 (태양 뒤편 위치, 관측 불가)"
+        elif phase_angle == 270: pos_status = "서구 (오른쪽/서쪽 위치, 새벽 남중)"
 
     sky_html = f"""
-    <div style="background:{sky_gradient}; border-radius:12px; padding:35px; text-align:center;">
-        <div style="color:#C9D1D9; font-weight:600; margin-bottom:20px; font-size:1rem;">{st.session_state.current_hour:02d}:00 | {direction}쪽 하늘 시야</div>
-        <svg width="140" height="140" viewBox="0 0 100 100">{celestial_graphics}</svg>
-        <div style="margin-top:20px;"><span class="status-pill">{pos_status}</span></div>
+    <div style="background:{sky_gradient}; border-radius:12px; padding:30px; text-align:center; position:relative;">
+        <div style="color:#C9D1D9; font-weight:600; margin-bottom:10px; font-size:1rem;">
+            {st.session_state.current_hour:02d}:00 | {direction} 지평선 시야 {"☀️ (주간 - 점선 표시)" if is_daytime else "🌙 (야간)"}
+        </div>
+        <svg width="240" height="150" viewBox="0 0 100 60" style="background:rgba(255,255,255,0.03); border-radius:8px;">
+            <line x1="0" y1="52" x2="100" y2="52" stroke="#484F58" stroke-width="0.8" />
+            <text x="8" y="58" fill="#8B949E" font-size="5" font-weight="bold">동(East) [왼쪽]</text>
+            <text x="50" y="58" fill="#8B949E" font-size="5" text-anchor="middle">남(South)</text>
+            <text x="92" y="58" fill="#8B949E" font-size="5" text-anchor="end">서(West) [오른쪽]</text>
+            {celestial_graphics}
+        </svg>
+        <div style="margin-top:15px;"><span class="status-pill">{pos_status}</span></div>
     </div>
     """
     components.html(sky_html, height=310)
@@ -198,7 +211,7 @@ with col1:
             st.session_state.current_hour = (st.session_state.current_hour + 1) % 24
             st.rerun()
     with t_col3:
-        st.markdown(f"<div style='padding-top:6px; font-size:0.95rem;'>지구 기준 시각: <b>{st.session_state.current_hour:02d}:00</b></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='padding-top:6px; font-size:0.95rem;'>현재 내부 지정 시각: <b>{st.session_state.current_hour:02d}:00</b></div>", unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 # --- [우측 카드] 우주 공간 위치 관계 (Orbit View) ---
@@ -213,19 +226,14 @@ with col2:
         obj_x = sun_x + orbit_radius * np.cos(rad)
         obj_y = sun_y + orbit_radius * np.sin(rad)
         obj_color = "#FB923C"
-    elif "일식" in target_mode:
+    elif "일식" in target_mode or "월식" in target_mode:
         orbit_radius = 10
         rad = np.radians(90 - st.session_state.current_phase)
         obj_x = earth_x + orbit_radius * np.cos(rad)
         obj_y = earth_y + orbit_radius * np.sin(rad)
         obj_color = "#FBBF24"
-    elif "월식" in target_mode:
-        orbit_radius = 10
-        rad = np.radians(90 - st.session_state.current_phase)
-        obj_x = earth_x + orbit_radius * np.cos(rad)
-        obj_y = earth_y + orbit_radius * np.sin(rad)
-        obj_color = "#FBBF24"
-        shadow_overlay = f'<polygon points="{earth_x-3.5},{earth_y} {earth_x+3.5},{earth_y} {earth_x+7},100 {earth_x-7},100" fill="rgba(239, 68, 68, 0.15)" stroke="rgba(239,68,68,0.3)" stroke-width="0.3" stroke-dasharray="1" />'
+        if "월식" in target_mode:
+            shadow_overlay = f'<polygon points="{earth_x-3.5},{earth_y} {earth_x+3.5},{earth_y} {earth_x+7},100 {earth_x-7},100" fill="rgba(239, 68, 68, 0.15)" stroke="rgba(239,68,68,0.3)" stroke-width="0.3" stroke-dasharray="1" />'
     else: 
         orbit_radius = 42 
         rad = np.radians(90 - st.session_state.current_phase)
@@ -249,15 +257,16 @@ with col2:
     """
     components.html(orbit_html, height=310)
 
-    # [더블 터치 버그 완벽 수정] 콜백 함수 연동을 이용해 드래그 즉시 적용되게 구조 개편
-    st.markdown('<p class="control-label">🔄 공전 각도 정밀 제어 (즉각적인 실시간 리렌더링)</p>', unsafe_allow_html=True)
+    st.markdown('<p class="control-label">🔄 공전 각도 정밀 제어 (즉각 연동)</p>', unsafe_allow_html=True)
+    
+    # 세션 값을 직접 바인딩하고 가로채는 방식으로 안정적 연동 설계
     st.slider(
         "공전 각도 조절 (°)", min_value=0, max_value=359, 
         value=int(st.session_state.current_phase), 
         key="slider_val", on_change=update_phase_from_slider
     )
     
-    st.markdown('<p class="control-label">🌌 천체 공전 위치 퀵 매핑 (PPT 주요 개념)</p>', unsafe_allow_html=True)
+    st.markdown('<p class="control-label">🌌 천체 공전 위치 퀵 매핑</p>', unsafe_allow_html=True)
     if "내행성" in target_mode:
         p_col1, p_col2, p_col3, p_col4 = st.columns(4)
         with p_col1:
@@ -294,24 +303,16 @@ with col2:
 
 # 6. 하단 교과 원리 가이드 리포트
 st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-st.markdown("<h3 style='font-size:1.1rem; font-weight:600; color:#8B949E; margin-bottom:12px;'>📘 지구과학I 천체 파트 교과 기하 원리 가이드</h3>", unsafe_allow_html=True)
+st.markdown("<h3 style='font-size:1.1rem; font-weight:600; color:#8B949E; margin-bottom:12px;'>📘 지구과학I 천체 파트 교과 기하 원리 가이드 (방위각 교정 완료)</h3>", unsafe_allow_html=True)
 
 if "내행성" in target_mode:
     st.markdown("""
-    * **동방최대이각 (47° 부근 - 오른쪽 배치):** 태양-지구 선 기준 우측에 위치합니다. 저녁 18시에 관측자가 서쪽 하늘을 바라볼 때 태양이 지고 난 후 서쪽 지평선 위에 남아있으므로 **초저녁 서쪽 하늘**에서 **오른쪽 면이 밝은 상현달 모양(반달)**으로 관측됩니다.
-    * **서방최대이각 (313° 부근 - 왼쪽 배치):** 태양-지구 선 기준 좌측에 위치합니다. 새벽 6시에 동쪽 하늘을 바라볼 때 태양보다 먼저 떠올라 위치하므로 **새벽 동쪽 하늘**에서 **왼쪽 면이 밝은 하현달 모양(반달)**으로 관측됩니다.
-    """)
-elif "일식" in target_mode:
-    st.markdown("""
-    * **일식(Solar Eclipse):** 달이 태양과 지구 사이인 **삭(0°)** 정렬에 도달하여 달의 본그림자가 지구를 가릴 때 일어납니다. 태양-달-지구 순서의 기하 배치입니다.
-    """)
-elif "월식" in target_mode:
-    st.markdown("""
-    * **월식(Lunar Eclipse):** 달이 지구 반대편인 **망(180°)** 정렬에 도달하여 지구의 본그림자 속으로 완전히 들어갈 때 일어납니다. 태양-지구-달 순서의 배치이며, 붉은색 빛이 굴절되어 달에 닿기 때문에 **블러드문** 현상이 성립합니다.
+    * **동방최대이각 (47° 부근):** 관측 시야상 **왼쪽(동쪽)**에 위치하게 됩니다. 초저녁 서쪽 지평선을 바라볼 때 태양의 왼쪽(위쪽)에 남아 있으므로 해가 진 직후 잠깐 관측이 가능합니다.
+    * **서방최대이각 (313° 부근):** 관측 시야상 **오른쪽(서쪽)**에 위치하게 됩니다. 새벽 동쪽 지평선을 바라볼 때 태양의 오른쪽(위쪽)에 먼저 떠오르므로 해가 뜨기 직전 관측 가능합니다.
     """)
 else:
     st.markdown("""
-    * **충 (0°):** 외행성이 지구와 가장 가까워지는 위치로, 지구-태양 일직선 바깥 방향(아래쪽)에 정렬합니다. 자정(24시)에 남중하므로 한밤중에 가장 크게 보름달(망) 모양 구조로 관측됩니다.
-    * **동구 (90° - 우측) / 서구 (270° - 좌측):** 태양-지구 연결선과 외행성이 이루는 각도가 정확히 **직각($90^\circ$)**을 이룰 때를 의미합니다. 동구 위치일 때는 초저녁(18시)에 남중하고, 서구 위치일 때는 새벽(6시)에 남중하는 기하학적 특징을 가집니다.
+    * **동구 (90°) / 서구 (270°):** 남쪽 하늘을 볼 때 동쪽(왼쪽)에서 떠올라 서쪽(오른쪽)으로 지는 천체의 겉보기 운동 경로 상에서 정밀 동기화됩니다.
+    * **주간 음영 점선 효과:** 낮 시각(06:00 ~ 18:00)에는 대기 산란으로 인해 천체가 실제로 하늘에 떠 있더라도 관측이 어려우므로 점선 및 반투명 처리가 자동으로 활성화됩니다.
     """)
 st.markdown('</div>', unsafe_allow_html=True)
