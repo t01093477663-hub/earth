@@ -6,17 +6,25 @@ import matplotlib.font_manager as fm
 import os
 
 # ==========================================
-# [중요] 한글 폰트 깨짐 해결 로직
+# [수정] 시스템 내장 한글 폰트 자동 검색 로직
 # ==========================================
-# 프로젝트 폴더에 NanumGothic.ttf 파일을 함께 업로드해야 합니다.
-FONT_FILENAME = "NanumGothic.ttf"
+@st.cache_data
+def find_hangul_font():
+    # 리눅스/윈도우/맥 시스템 폰트 중에서 한글 표현이 가능한 폰트 검색
+    font_list = fm.findSystemFonts()
+    # 스트림릿 서버(리눅스)에 기본 탑재된 Nanum, Un, DejaVu 등 검색
+    target_fonts = [f for f in font_list if any(name in f.lower() for name in ['nanum', 'un', 'gothic', 'malgun', 'sans'])]
+    
+    if target_fonts:
+        return target_fonts[0] # 가장 먼저 발견된 폰트 경로 반환
+    return None
 
-if os.path.exists(FONT_FILENAME):
-    # 폰트 등록 및 기본 폰트 설정
-    font_prop = fm.FontProperties(fname=FONT_FILENAME)
+font_path = find_hangul_font()
+
+if font_path:
+    font_prop = fm.FontProperties(fname=font_path)
     plt.rc('font', family=font_prop.get_name())
-    # 마이너스 기호 깨짐 방지
-    plt.rc('axes', unicode_minus=False)
+    plt.rc('axes', unicode_minus=False) # 마이너스 기호 깨짐 방지
     font_available = True
 else:
     font_available = False
@@ -36,9 +44,8 @@ st.markdown("""
         background-color: #1A202C;
         border-right: 1px solid #2D3748;
     }
-    h1, h2, h3 {
+    h1, h2, h3, h4 {
         color: #63B3ED !important;
-        font-family: 'Malgun Gothic', sans-serif;
     }
     .metric-card {
         background-color: #1A202C;
@@ -50,11 +57,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🌌 천체 위치 및 위상 시뮬레이터 (V2)")
+st.title("🌌 천체 위치 및 위상 시뮬레이터")
 st.caption("날짜와 시간을 슬라이더로 조절하며 행성의 위치 관계와 밤하늘 위상을 확인하세요.")
-
-if not font_available:
-    st.warning(f"⚠️ 한글 폰트 파일('{FONT_FILENAME}')이 소스 코드와 같은 폴더에 없습니다. 깃허브에 폰트 파일을 함께 올리셔야 웹에서 한글이 깨지지 않습니다.")
 
 # ==========================================
 # 사이드바 제어판 (UI 개선)
@@ -67,19 +71,17 @@ obs_date = st.sidebar.date_input("관측 날짜 선택", datetime.date.today())
 # 시간 선택 (슬라이더 방식으로 개선: 30분 단위 탐색)
 st.sidebar.markdown("**관측 시간 선택 (슬라이더)**")
 time_slots = [f"{h:02d}:{m:02d}" for h in range(24) for m in [0, 30]]
-# 기본값을 밤 22:00으로 설정
-default_index = time_slots.index("22:00")
 selected_time_str = st.sidebar.select_slider(
     "시간을 좌우로 움직여보세요",
     options=time_slots,
-    value="22:00"
+    value="22:00" # 기본값을 밤 10시로 설정
 )
 
 # 방위 선택
 direction = st.sidebar.selectbox("바라볼 방향 (방위)", ["남 (South)", "동 (East)", "서 (West)", "북 (North)"])
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 🪐 행성 표시 필터")
+st.sidebar.markdown("### 🪐 천체 표시 필터")
 show_moon = st.sidebar.checkbox("달 (Moon) 표시", value=True)
 show_inner = st.sidebar.checkbox("내행성 (수성, 금성) 표시", value=True)
 show_outer = st.sidebar.checkbox("외행성 (화성, 목성) 표시", value=True)
@@ -131,7 +133,7 @@ def plot_solar_system():
     ax.set_ylim(-6, 6)
     ax.axis('off')
     
-    # 한글 폰트 지정을 위한 범례 설정
+    # 한글 폰트가 적용 가능할 때만 prop 인자 설정
     if font_available:
         ax.legend(loc='upper right', facecolor='#1A202C', edgecolor='#2D3748', labelcolor='white', prop=font_prop)
     else:
@@ -149,19 +151,23 @@ def plot_sky_view(dir_setting):
     ax.fill_between([-10, 10], -2, 0, color='#11141D')
     
     # 방위에 따른 텍스트 및 천체 디자인
+    text_kwargs = {'color': '#FFF', 'ha': 'center'}
+    if font_available:
+        text_kwargs['fontproperties'] = font_prop
+
     if "남" in dir_setting:
         ax.text(0, 2, "🌙", fontsize=32, ha='center', va='center')
-        ax.text(0, 1.3, "남중한 달 (Moon)", color='#FFF', ha='center', fontproperties=font_prop if font_available else None)
+        ax.text(0, 1.3, "남중한 달 (Moon)", **text_kwargs)
         if show_outer:
             ax.text(2.5, 1.8, "🔴", fontsize=16, ha='center', va='center')
-            ax.text(2.5, 1.3, "화성 (Mars)", color='#FFF', ha='center', fontproperties=font_prop if font_available else None)
+            ax.text(2.5, 1.3, "화성 (Mars)", **text_kwargs)
     elif "동" in dir_setting:
         ax.text(3, 1.2, "🪐", fontsize=28, ha='center', va='center')
-        ax.text(3, 0.6, "떠오르는 목성", color='#FFF', ha='center', fontproperties=font_prop if font_available else None)
+        ax.text(3, 0.6, "떠오르는 목성", **text_kwargs)
     elif "서" in dir_setting:
         if show_inner:
             ax.text(-3, 1.0, "✨", fontsize=24, ha='center', va='center', color='#FFD700')
-            ax.text(-3, 0.5, "지는 금성 (초저녁)", color='#FFF', ha='center', fontproperties=font_prop if font_available else None)
+            ax.text(-3, 0.5, "지는 금성 (초저녁)", **text_kwargs)
     elif "북" in dir_setting:
         ax.text(0, 2.5, "⭐", fontsize=20, ha='center', va='center', color='#63B3ED')
         ax.text(0, 2.1, "북극성 (Polaris)", color='#63B3ED', ha='center', fontproperties=font_prop if font_available else None)
