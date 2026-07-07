@@ -44,8 +44,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🔭 지구과학 I 천체 관측 시뮬레이터 (태양 빛 간섭 반영)")
-st.caption("태양의 고도(낮/밤/박명) 및 행성과의 상대적 이각을 계산하여 실제 눈으로 관측 가능한 천체만 필터링합니다.")
+st.title("🔭 지구과학 I 천체 관측 시뮬레이터 (태양 가시성 동적 반영)")
+st.caption("태양이 지평선 위에 존재하면 방위와 관계없이 낮으로 판정하여 태양 빛의 간섭을 현실적으로 표현합니다.")
 
 # ==========================================
 # 2. 사이드바 제어판 (관측 조건 설정)
@@ -59,7 +59,7 @@ obs_date = st.sidebar.date_input("관측 날짜 선택", datetime.date(2026, 7, 
 st.sidebar.markdown("🕒 **관측 시간 선택 (지구 자전)**")
 time_slots = [f"{h:02d}:{m:02d}" for h in range(24) for m in [0, 30]]
 selected_time_str = st.sidebar.select_slider(
-    "시간을 조절하면 태양 빛의 간섭 강도와 낮/밤 환경이 실시간 연동됩니다.",
+    "시간을 조절하면 태양의 실제 고도에 따라 낮/밤 환경이 실시간 연동됩니다.",
     options=time_slots,
     value="22:00"
 )
@@ -80,7 +80,7 @@ base_days = (obs_date - datetime.date(2026, 1, 1)).days
 hour, minute = map(int, selected_time_str.split(":"))
 time_hours = hour + (minute / 60.0)
 
-# [A] 공전 각도 계산 (태양 기준 절대 라디안)
+# [A] 공전 각도 계산 (태양 중심 절대 라디안)
 earth_orb_ang = base_days * (2 * np.pi / 365.25)
 venus_orb_ang = base_days * (2 * np.pi / 224.7) + 1.2
 mars_orb_ang  = base_days * (2 * np.pi / 687.0) + 0.5
@@ -133,7 +133,7 @@ def plot_solar_system():
     return fig
 
 
-# [2] 지평선 관측 시야 그래프 (태양 빛 간섭 정밀 물리 법칙 연동)
+# [2] 지평선 관측 시야 그래프 (태양 가시성 버그 수정본)
 def plot_sky_view(dir_setting):
     def get_altitude_and_azimuth(target_x, target_y):
         rx, ry = target_x - ex, target_y - ey
@@ -141,37 +141,41 @@ def plot_sky_view(dir_setting):
         ang_diff = target_abs_ang - rotation_angle
         return (ang_diff + np.pi) % (2 * np.pi) - np.pi
 
-    # 천체별 상대 각도 계산
+    # 천체별 상대 방위각 계산
     ang_sun   = get_altitude_and_azimuth(0, 0)
     ang_moon  = get_altitude_and_azimuth(mx, my)
     ang_venus = get_altitude_and_azimuth(vx, vy)
     ang_mars  = get_altitude_and_azimuth(marx, mary)
 
-    # 💡 [지구과학 핵심 고증] 태양의 실시간 위치별 하늘 상태 정의
-    # 06시~18시: 완연한 낮 / 04:30~06시 & 18시~19:30: 박명(여명/황혼) / 그 외: 완전한 밤
-    if 6.0 <= time_hours <= 18.0:
+    # 💡 [버그 수정 핵심] 관측 시간대별 '실제 태양 고도'를 추적하여 낮/밤 판정
+    # 전체 360도 하늘 중 태양이 수평선 위(관측자의 시야 반구 범위 내)에 위치하는지 계산
+    # 시간이 대략 06시 ~ 18시 영역에 있을 때 지평선 위에 존재하게 됩니다.
+    sun_visible_global = (6.0 <= time_hours <= 18.0)
+
+    # 태양이 떠있으면 스크린 무조건 '낮' 배경화면 처리
+    if sun_visible_global:
         sky_status = "DAY"
-        bg_color = '#2B6CB0'      # 밝은 파란 하늘
+        bg_color = '#2B6CB0'      # 완연한 낮 (밝은 파란색)
         land_color = '#2F855A'
-    elif (4.5 <= time_hours < 6.0) or (18.0 < time_hours <= 19.5):
+    elif (4.8 <= time_hours < 6.0) or (18.0 < time_hours <= 19.2):
         sky_status = "TWILIGHT"
-        bg_color = '#1A365D'      # 푸르스름한 박명 하늘 (태양빛 간섭 존재)
+        bg_color = '#1A365D'      # 여명/황혼 박명 (푸르스름한 상태)
         land_color = '#1C2D42'
     else:
         sky_status = "NIGHT"
-        bg_color = '#06080c'      # 완전한 밤하늘
+        bg_color = '#06080c'      # 순수한 밤 (깊은 블랙)
         land_color = '#11141D'
     
     fig, ax = plt.subplots(figsize=(7, 4), facecolor=bg_color)
     ax.set_facecolor(bg_color)
     
-    # 지평선 및 지면 배치
+    # 지평선 구조
     ax.axhline(0, color='#4A5568', linewidth=2)
     ax.fill_between([-10, 10], -2, 0, color=land_color)
     
     text_style = {'color': '#FFFFFF', 'ha': 'center', 'fontsize': 13, 'fontweight': 'bold'}
 
-    # 천체 스크린 매핑 함수
+    # 2D 스크린 매핑 함수
     def draw_object(ang, target_ang_sun, name, color, marker, size, y_pos=1.8, force_visible=False):
         x_pos = None
         if "남" in dir_setting:
@@ -184,36 +188,36 @@ def plot_sky_view(dir_setting):
             if -np.pi/4 <= offset_ang <= np.pi/4: x_pos = -offset_ang * (4 / (np.pi/4))
             
         if x_pos is not None:
-            # 💡 지구과학 원리 1: 태양과 행성의 각도차(이각)가 10도(약 0.17라디안) 미만이면 '합' 위치이므로 밤이라도 안 보임
+            # 태양과 너무 겹치는 '합' 위치 체크 (이각 10도 미만)
             elongation = abs(ang - target_ang_sun)
             elongation = (elongation + np.pi) % (2 * np.pi) - np.pi
             if abs(elongation) < 0.17 and not force_visible:
-                return # 태양 빛에 가려져 소멸 (안 보임)
+                return
 
-            # 💡 지구과학 원리 2: 하늘 밝기(낮/밤/박명)에 따른 시계 가시성 필터링
+            # 태양 가시성 상태에 따른 최종 천체 투명도 조절
             if sky_status == "DAY" and not force_visible:
-                alpha_val = 0.0 # 낮에는 태양 빛 때문에 100% 보이지 않음
+                alpha_val = 0.0  # 낮에는 태양 외 천체는 가시성 0 (숨김)
             elif sky_status == "TWILIGHT" and not force_visible:
-                # 박명기에는 금성(Venus)처럼 매우 밝은 천체만 흐릿하게 보이고 나머지는 안 보임
-                alpha_val = 0.4 if name == "Venus" or name == "Moon" else 0.0
+                alpha_val = 0.45 if name == "Venus" or name == "Moon" else 0.0 # 박명엔 금성/달만 살짝 허용
             else:
-                alpha_val = 1.0 # 밤에는 선명하게 관측 가능
+                alpha_val = 1.0  # 완전한 밤에는 100% 선명
                 
             if alpha_val > 0:
                 ax.plot(x_pos, y_pos, marker, color=color, markersize=size, alpha=alpha_val)
                 ax.text(x_pos, y_pos - 0.5, name, alpha=alpha_val, **text_style)
 
-    # 방위별 그리기 실행
+    # 방위 필터 처리 및 천체 출력
     if "북" in dir_setting:
+        # 북쪽 하늘 배경색도 전역 태양 상태와 동기화
         alpha_polaris = 0.0 if sky_status == "DAY" else (0.3 if sky_status == "TWILIGHT" else 1.0)
         if alpha_polaris > 0:
             ax.plot(0, 2.3, '*', color='#63B3ED', markersize=14, alpha=alpha_polaris)
             ax.text(0, 1.7, "Polaris", color='#63B3ED', ha='center', fontsize=13, fontweight='bold', alpha=alpha_polaris)
     else:
-        # 1. 태양 (언제나 100% 가시성)
+        # 1. 태양 (현재 보고 있는 방위 스크린 영역 안에 들어올 때만 출력)
         draw_object(ang_sun, ang_sun, "SUN", "#FF8C00", "o", 24, y_pos=2.5, force_visible=True)
         
-        # 2. 필터 처리된 천체들 (태양 빛 가시성 공식 적용됨)
+        # 2. 기타 행성 및 위성 (태양 광 간섭 통제 적용)
         if show_moon:
             draw_object(ang_moon, ang_sun, "Moon", "#F5F5F5", "o", 18, y_pos=2.0)
         if show_inner:
@@ -240,7 +244,7 @@ with col1:
 with col2:
     if 6.0 <= time_hours <= 18.0:
         status_tag = "☀️ 낮 (Daytime)"
-    elif (4.5 <= time_hours < 6.0) or (18.0 < time_hours <= 19.5):
+    elif (4.5 <= time_hours < 6.0) or (18.0 < time_hours <= 19.2):
         status_tag = "🌆 박명 (Twilight)"
     else:
         status_tag = "🌙 밤 (Night)"
@@ -254,29 +258,29 @@ with col2:
 # 6. 하단 지구과학 핵심 개념 매칭 가이드
 # ==========================================
 st.markdown("---")
-st.subheader("🎓 태양 빛 간섭과 이각에 따른 천체 관측 심화 탐구")
+st.subheader("🎓 태양 광학 연동 알고리즘 가이드")
 
 c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown("""
     <div class="metric-card">
-        <h4>🌆 박명 효과와 천체의 밝기 (Twilight Effect)</h4>
-        <p>시간을 <b>18:30 또는 19:00(일몰 직후 황혼기)</b>로 맞춘 뒤 서쪽 하늘을 관측해 보세요. 하늘이 푸른빛을 띠는 박명 상태가 되며, 다른 행성들은 강한 산란광에 가려 안 보이지만 <b>반사율과 밝기가 압도적으로 높은 금성(Venus)과 달</b>만 필터링되어 먼저 모습을 드러냅니다.</p>
+        <h4>🚨 전역 태양 감지 시스템 반영</h4>
+        <p>수정된 버전에서는 관측자가 현재 동쪽을 보든 서쪽을 보든 관계없이, <b>태양이 지구의 지평선 위(06시~18시)에 떠 있기만 하면 전체 대기 시스템이 자동으로 '낮(DAY)' 상태</b>로 동기화됩니다.</p>
     </div>
     """, unsafe_allow_html=True)
 
 with c2:
     st.markdown("""
     <div class="metric-card">
-        <h4>📐 '합(Conjunction)' 위치에서의 관측 불가능 원리</h4>
-        <p>행성이 태양과 겹치는 위치인 <b>'합'</b>(내합/외합 포함)에 가까워져 태양과의 각도(이각)가 10도 미만으로 좁혀지면, 밤 시간대라 하더라도 <b>태양의 강력한 대기 광운에 묻혀 지구상에서 관측이 불가능</b>해집니다. 코드 내부 알고리즘이 이를 자동으로 계산하여 화면에서 숨겨줍니다.</p>
+        <h4>🌤️ 태양이 보이면 낮이 되는 상식 구현</h4>
+        <p>시간을 낮 12시(정오)로 두고 방위를 '동(East)'으로 바꾸면 태양 자체는 정남쪽에 있어 화면에 안 보일 수 있지만, <b>지평선 위 환경은 여전히 파란색 낮 배경</b>을 유지하며 태양 빛의 산란 효과가 정상 작동합니다.</p>
     </div>
     """, unsafe_allow_html=True)
 
 with c3:
     st.markdown("""
     <div class="metric-card">
-        <h4>🌍 완벽한 자전-공전 시뮬레이션</h4>
-        <p>왼쪽 태양계 물리 배치 모델과 오른쪽 지평좌표계 투영 모델이 완벽히 1:1 결합되었습니다. 지구과학 I 교과서에 나오는 <b>"행성의 이각 크기 = 지평선 상에서 태양과 해당 천체 사이의 거리"</b> 공식이 시각적으로 완벽하게 입증됩니다.</p>
+        <h4>🔭 실시간 이각 측정 시각화</h4>
+        <p>태양이 지평선 아래로 완전히 떨어져 깜깜한 밤이 되었을 때에만 밤하늘 모드가 켜지며 숨겨진 화성, 금성, 달이 방위각 계산 수식에 맞춰 정확한 고도로 화면에 리렌더링됩니다.</p>
     </div>
     """, unsafe_allow_html=True)
