@@ -41,7 +41,11 @@ st.markdown("""
 if "current_hour" not in st.session_state:
     st.session_state.current_hour = 18  # 초저녁(18시) 기본값
 if "current_phase" not in st.session_state:
-    st.session_state.current_phase = 47 # 초기 위치 기본값
+    st.session_state.current_phase = 47 # 초기 위치 기본값 (동방최대이각)
+
+# [버그 킬러] 슬라이더 조작 즉시 세션 상태를 안전하게 동기화하는 콜백 함수
+def update_phase_from_slider():
+    st.session_state.current_phase = st.session_state.slider_val
 
 # 3. 사이드바 제어 패널
 st.sidebar.title("🔭 Astro Control")
@@ -91,7 +95,7 @@ with col1:
     
     if "내행성" in target_mode:
         target_color = "#FB923C"
-        # [방위 교정 완수] 우측(0~180도)이 동방구역(오른쪽이 밝음), 좌측(180~360도)이 서방구역(왼쪽이 밝음)
+        # [방위 교정] 우측(0~180도)이 동방구역(오른쪽이 밝음), 좌측(180~360도)이 서방구역(왼쪽이 밝음)
         phase_ratio = (1 + np.cos(np.radians(phase_angle))) / 2
         is_lit_right = (phase_angle < 180) 
         rx_val = abs(45 * (2 * phase_ratio - 1))
@@ -146,20 +150,19 @@ with col1:
             """
             pos_status = "월식 범위 외 (달의 일반 위상 상태)"
             
-    else: # 외행성 모드 (위상 및 크기 변화 연산 문제 해결)
+    else: # 외행성 모드
         target_color = "#EF4444"
         
-        # 지구(50,80), 태양(50,50), 외행성(궤도 반지름 42) 사이의 거리 실시간 연산 -> 시직경 조절
+        # 지구(50,80), 태양(50,50), 외행성(반지름 42) 사이의 거리 연산에 따른 동적 크기 매핑
         rad_calc = np.radians(90 - phase_angle)
         ex = 50 + 42 * np.cos(rad_calc)
         ey = 50 + 42 * np.sin(rad_calc)
         dist_to_earth = np.sqrt((ex - 50)**2 + (ey - 80)**2)
         
-        # 거리가 가까울수록(충=12일 때 최대 45), 멀수록(합=72일 때 최소 18) 시직경 유동적 매핑
+        # 충(지구와 최소거리 12) -> 크기 최대(45) / 합(지구와 최대거리 72) -> 크기 최소(18)
         dynamic_r = 18 + (45 - 18) * (1.0 - (dist_to_earth - 12) / 60)
         
-        # 외행성의 미세한 차구 위상 변화율 연산 (지구-외행성-태양 사잇각 반영)
-        # 충(0)과 합(180)에서는 보름달(1.0), 동구(90)와 서구(270)에서는 약간 깎임(약 0.88)
+        # 외행성의 미세한 차구 위상 변화율 연산 (동구/서구 영역에서 미세하게 위상이 깎임)
         ell_ratio = 0.88 + 0.12 * abs(np.cos(np.radians(phase_angle)))
         is_lit_right = (phase_angle < 180)
         rx_val = abs(dynamic_r * (2 * ell_ratio - 1))
@@ -206,7 +209,6 @@ with col2:
     shadow_overlay = ""
     if "내행성" in target_mode:
         orbit_radius = 16
-        # [방위 교정 적용] 시계 방향 오프셋 각도 전환 연산 처리 완료
         rad = np.radians(90 - st.session_state.current_phase)
         obj_x = sun_x + orbit_radius * np.cos(rad)
         obj_y = sun_y + orbit_radius * np.sin(rad)
@@ -247,10 +249,12 @@ with col2:
     """
     components.html(orbit_html, height=310)
 
-    # [터치 버그 수정] key를 직접 연동하여 슬라이더 조절 즉시 화면 업데이트가 수행됨
+    # [더블 터치 버그 완벽 수정] 콜백 함수 연동을 이용해 드래그 즉시 적용되게 구조 개편
     st.markdown('<p class="control-label">🔄 공전 각도 정밀 제어 (즉각적인 실시간 리렌더링)</p>', unsafe_allow_html=True)
     st.slider(
-        "공전 각도 조절 (°)", min_value=0, max_value=359, key="current_phase", step=1
+        "공전 각도 조절 (°)", min_value=0, max_value=359, 
+        value=int(st.session_state.current_phase), 
+        key="slider_val", on_change=update_phase_from_slider
     )
     
     st.markdown('<p class="control-label">🌌 천체 공전 위치 퀵 매핑 (PPT 주요 개념)</p>', unsafe_allow_html=True)
