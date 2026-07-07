@@ -7,7 +7,7 @@ st.set_page_config(page_title="지구과학I 천체 운동 시뮬레이터", lay
 
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Pretendard:wght@400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Pretendard:wght=400;600;700&display=swap');
     
     html, body, [class*="css"] {
         font-family: 'Pretendard', sans-serif;
@@ -55,7 +55,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 2. 사이드바 제어 패널 (불필요한 슬라이더 전면 제거)
+# 2. 사이드바 제어 패널
 st.sidebar.title("🔭 천체 관측 제어")
 st.sidebar.markdown("---")
 
@@ -66,16 +66,16 @@ target_mode = st.sidebar.selectbox(
 
 st.sidebar.markdown("### 2. 관측 시각 조절 (지구 자전)")
 # 세션 상태(Session State)를 활용한 버튼식 시간 제어 구현
-if "current_hour" not in st.st.session_state:
+if "current_hour" not in st.session_state:
     st.session_state.current_hour = 22
 
 t_col1, t_col2 = st.sidebar.columns(2)
 with t_col1:
     if st.button("⏰ -1시간"):
-        st.session_state.current_hour = (st.session_state.current_hour - 1) % 25
+        st.session_state.current_hour = (st.session_state.current_hour - 1) % 24
 with t_col2:
     if st.button("⏰ +1시간"):
-        st.session_state.current_hour = (st.session_state.current_hour + 1) % 25
+        st.session_state.current_hour = (st.session_state.current_hour + 1) % 24
 
 st.sidebar.markdown(f"**현재 설정 시각:** `{st.session_state.current_hour:02d}:00`")
 
@@ -137,7 +137,7 @@ st.markdown('<p class="sub-header">지구과학I 교과 연동 실시간 기하 
 
 col1, col2 = st.columns([1, 1])
 
-# [좌측] 지구 시점 위상 그래픽 (의미 없는 글자 제거, 실제 코로나 광학 그래픽화)
+# [좌측] 지구 시점 위상 그래픽
 with col1:
     st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
     st.subheader("👀 지구 관측 시점 (Sky View)")
@@ -150,7 +150,6 @@ with col1:
     base_fill = target_color if phase_ratio > 0.5 else "#141923"
     shadow_fill = "#141923" if phase_ratio > 0.5 else target_color
 
-    # 특수 일식/월식 광학 레이어 드로잉 (글자 박기 제거)
     celestial_graphics = f"""
     <circle cx="50" cy="50" r="45" fill="#141923" />
     <path d="M 50 5 A 45 45 0 0 {1 if is_lit_right else 0} 50 95 Z" fill="{target_color}" />
@@ -190,19 +189,17 @@ with col1:
     components.html(sky_html, height=310)
     st.markdown('</div>', unsafe_allow_html=True)
 
-# [우측] 우주 시점 기하 관계도 (의미 없는 검은색 막대 전면 제거, 정돈된 라인 가이드)
+# [우측] 우주 시점 기하 관계도
 with col2:
     st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
     st.subheader("🌌 우주 공간 위치 관계 (Orbit View)")
     
-    # 모드별 타겟 천체 기하 좌표 바인딩
     if "일식과 월식" in target_mode:
         orbit_radius = 13
         obj_x = earth_x + orbit_radius * np.sin(alpha)
         obj_y = earth_y - orbit_radius * np.cos(alpha)
         label_text = "MOON"
         obj_color = "#F4D03F"
-        # 월식 지구 그림자 영역 가이드 (세련된 단일 투명 레이어로 처리)
         shadow_overlay = f'<polygon points="{earth_x-4.5},{earth_y} {earth_x+4.5},{earth_y} {earth_x+10},0 {earth_x-10},0" fill="rgba(231, 76, 60, 0.06)" />'
     elif "내행성" in target_mode:
         orbit_radius = 18
@@ -246,21 +243,22 @@ with col2:
     components.html(orbit_html, height=310)
     st.markdown('</div>', unsafe_allow_html=True)
 
-# 6. 하단 교과 원리 분석 가이드 리포트
+# 6. 하단 교과 원리 분석 가이드 리포트 (SyntaxError 괄호 매칭 완전 수정 완료)
 st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-st.subheader("📘 지구과학I 천체 파트 교과 핵심 분석")
+st.subheader("📘 지구과학I 천체 파과 교과 핵심 분석")
 
 if "일식과 월식" in target_mode:
-    st.markdown(f"""
-    * **일식 원리:** 달이 태양과 지구 사이에 배치되는 <span style="color:#38BDF8; font-weight:600;">삭(각도 180°)</span> 구간에서 달의 본그림자가 지구를 가릴 때 개기일식이 성립합니다. 위 그래픽과 같이 태양이 완전히 가려지면 주위에 개기일식의 상징인 **황금빛 코로나(Corona)**가 관측됩니다.
-    * **월식 원리:** 달이 지구 반대편인 <span style="color:#38BDF8; font-weight:600;">망(각도 0°)</span> 부근에서 지구의 본그림자 영역 속에 완벽하게 정렬되면 개기월식이 일어나 어둡고 붉은 **블러드문(Blood Moon)**이 관측됩니다.
-    """), unsafe_allow_html=True)
+    st.markdown("""
+    * **일식 원리:** 달이 태양과 지구 사이에 배치되는 **삭(각도 180°)** 구간에서 달의 본그림자가 지구를 가릴 때 개기일식이 성립합니다. 위 그래픽과 같이 태양이 완전히 가려지면 주위에 개기일식의 상징인 **황금빛 코로나(Corona)**가 관측됩니다.
+    * **월식 원리:** 달이 지구 반대편인 **망(각도 0°)** 부근에서 지구의 본그림자 영역 속에 완벽하게 정렬되면 개기월식이 일어나 어둡고 붉은 **블러드문(Blood Moon)**이 관측됩니다.
+    """)
 elif "내행성" in target_mode:
-    st.markdown(f"""
-    * **내행성(금성)의 운동 특징:** 금성은 지구 안쪽 트궤도에서 공전하므로 태양과 일정한 사잇각인 <span style="color:#38BDF8; font-weight:600;">최대이각</span> 범위 내에서 왕복 운동을 반복하는 겉보기 운동을 보입니다. 내합 부근 퀵 버튼을 누르면 지구와 가까워져 가장 큰 시직경의 그믐달/초승달 위상을 확인할 수 있습니다.
-    """), unsafe_allow_html=True)
+    st.markdown("""
+    * **내행성(금성)의 운동 특징:** 금성은 지구 안쪽 궤도에서 공전하므로 태양과 일정한 사잇각인 **최대이각** 범위 내에서 왕복 운동을 반복하는 겉보기 운동을 보입니다. 내합 부근 퀵 버튼을 누르면 지구와 가까워져 가장 큰 시직경의 그믐달/초승달 위상을 확인할 수 있습니다.
+    """)
 else:
-    st.markdown(f"""
-    * **외행성(화성)의 운동 특징:** 화성이 지구와 태양 일직선 바깥쪽 방향인 <span style="color:#38BDF8; font-weight:600;">충(각도 0°)</span> 위치에 올 때 시직경이 가장 크게 관측되며, 관측자의 녹색 시선 바늘이 밤 24시 정면을 향하므로 한밤중에 정남쪽 하늘에서 가장 오랫동안 밝게 관측할 수 있습니다.
-    """), unsafe_allow_html=True)
+    st.markdown("""
+    * **외행성(화성)의 운동 특징:** 화성이 지구와 태양 일직선 바깥쪽 방향인 **충(각도 0°)** 위치에 올 때 시직경이 가장 크게 관측되며, 관측자의 녹색 시선 바늘이 밤 24시 정면을 향하므로 한밤중에 정남쪽 하늘에서 가장 오랫동안 밝게 관측할 수 있습니다.
+    """)
+
 st.markdown('</div>', unsafe_allow_html=True)
