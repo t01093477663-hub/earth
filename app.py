@@ -46,7 +46,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🔭 지구과학 I 천체 관측 시뮬레이터")
-st.caption("시점 화살표의 방향과 2D 관측 시야 스크린의 가시 영역을 기하학적으로 100% 동기화하여 연오류를 해결했습니다.")
+st.caption("시점 화살표의 방향과 2D 관측 시야 스크린의 가시 영역을 기하학적으로 100% 동기화하여 오류를 해결했습니다.")
 
 # ==========================================
 # 2. 사이드바 제어판 (관측 조건 설정)
@@ -128,7 +128,7 @@ elif np.pi / 2 < abs(rel_zenith_sun) <= (np.pi / 2 + 0.15):
     sky_status = "TWILIGHT"
     status_tag = "🌆 박명 (Twilight)"
     bg_color = '#1A365D'      # 어두운 푸른색
- land_color = '#1C2D42'
+    land_color = '#1C2D42'    # 들여쓰기 오류 수정 완료 부분
 else:
     sky_status = "NIGHT"
     status_tag = "🌙 밤 (Night)"
@@ -194,13 +194,13 @@ def plot_sky_view(dir_setting):
         # 관측자 천정(rotation_angle)과의 각도 격차 측정
         rel_zenith = (angle_from_earth - rotation_angle + np.pi) % (2 * np.pi) - np.pi
         if abs(rel_zenith) > np.pi / 2:
-            return  # 지평선 아래에 있으므로 즉시 렌더링 제외 (새벽 태양 노출 버그 차단)
+            return  # 지평선 아래에 있으므로 즉시 렌더링 제외
             
         # 고도각 정규화 계산 (0=지평선, 1=천정)
         alt_ratio = (np.pi/2 - abs(rel_zenith)) / (np.pi/2)
         y_pos = 0.3 + 3.2 * alt_ratio
         
-        # ② 💡 [핵심 버그 수정]: 시야 범위 필터 (방위각 계산)
+        # ② 시야 범위 필터 (방위각 계산)
         # 관측자가 바라보는 정면 시선각(view_angle)과의 차이 계산
         rel_view = (angle_from_earth - view_angle + np.pi) % (2 * np.pi) - np.pi
         
@@ -282,7 +282,7 @@ with c2:
     st.markdown("""
     <div class="metric-card">
         <h4>🔭 내행성과 외행성의 관측 시간과 위치</h4>
-        <p><b>내행성(금성 등)</b>은 공전 궤도가 지구 안쪽에 있어 태양과 이루는 이각이 항상 제한적입니다. 따라서 한밤중에는 볼 수 없고 주로 <b>초저녁(동방최대이각, 서쪽 하늘)</b>이나 <b>새벽녘(서방최대이각, 동쪽 하늘)</b>에 잠시 관측됩니다. 반면 <b>외행성(화성 등)</b>은 <b>충 위치에 있을 때 남중하여 밤새도록 관측</b>이 가능합니다.</p>
+        <p><b>내행성(금성 등)</b>은 공전 궤도가 지구 안쪽에 있어 태양와 이루는 이각이 항상 제한적입니다. 따라서 한밤중에는 볼 수 없고 주로 <b>초저녁(동방최대이각, 서쪽 하늘)</b>이나 <b>새벽녘(서방최대이각, 동쪽 하늘)</b>에 잠시 관측됩니다. 반면 <b>외행성(화성 등)</b>은 <b>충 위치에 있을 때 남중하여 밤새도록 관측</b>이 가능합니다.</p>
     </div>
     """, unsafe_allow_html=True)
 
