@@ -46,7 +46,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🔭 지구과학 I 천체 관측 시뮬레이터")
-st.caption("탑다운 뷰에 지구-태양 가이드라인을 추가하여 낮/밤 상태와 관측 시점의 관계를 더욱 직관적으로 수정했습니다.")
+st.caption("그래프 내부 한글 폰트 깨짐 현상을 방지하기 위해 맷플롯립 내부 텍스트를 영문으로 안전하게 최적화했습니다.")
 
 # ==========================================
 # 2. 사이드바 제어판 (관측 조건 설정)
@@ -150,7 +150,7 @@ def plot_solar_system():
     ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)) * 3.5, np.sin(np.linspace(0, 2*np.pi, 100)) * 3.5, '--', color='#2D3748', alpha=0.4)
     ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)) * 5.0, np.sin(np.linspace(0, 2*np.pi, 100)) * 5.0, '--', color='#2D3748', alpha=0.4)
     
-    # 💡 [요청 기능 추가]: 지구에서 태양을 향하는 주황색 가이드 점선 추가 (낮 중심축)
+    # 지구에서 태양을 향하는 주황색 가이드 점선 (낮 중심축)
     ax.plot([ex, 0], [ey, 0], ':', color='#FF8C00', alpha=0.7, linewidth=1.8, label='Sun Direction (Noon)')
     
     # 천체 플로팅
@@ -164,10 +164,14 @@ def plot_solar_system():
     if show_outer:
         ax.plot(marx, mary, 'o', markersize=8, label='Mars', color='#D14949')
         
+    # 💡 [글자 깨짐 방지 수정]: 선택된 한글 방위명을 영문으로 맵핑하여 매틀랩 폰트 오류 원천 차단
+    dir_map = {"남 (South)": "South", "동 (East)": "East", "서 (West)": "West", "북 (North)": "North"}
+    dir_eng = dir_map.get(direction, "South")
+        
     # 시점 화살표 (관측자가 선택한 방위를 가리킴)
     arrow_len = 0.8
     ax.arrow(ex, ey, np.cos(view_angle)*arrow_len, np.sin(view_angle)*arrow_len, 
-             head_width=0.15, head_length=0.15, fc='#4FD1C5', ec='#4FD1C5', label=f'Observer ({direction.split()[0]})')
+             head_width=0.15, head_length=0.15, fc='#4FD1C5', ec='#4FD1C5', label=f'Observer ({dir_eng})')
     
     ax.set_xlim(-6.5, 6.5)
     ax.set_ylim(-6.5, 6.5)
@@ -276,7 +280,7 @@ c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown("""
     <div class="metric-card">
-        <h4>🪐 행성의 순행 och 역행 (겉보기 운동)</h4>
+        <h4>🪐 행성의 순행과 역행 (겉보기 운동)</h4>
         <p>행성이 배경 별자리를 기준으로 <b>서쪽에서 동쪽</b>으로 이동하면 <b>순행</b>, <b>동쪽에서 서쪽</b>으로 이동하면 <b>역행</b>이라 합니다. 내행성은 지구와 가장 가까운 <b>내합</b> 부근에서 역행을 보이며, 외행성은 태양의 정반대편인 <b>충</b> 부근에서 지구와의 공전 속도 차이로 인해 역행 현상이 뚜렷하게 관찰됩니다.</p>
     </div>
     """, unsafe_allow_html=True)
