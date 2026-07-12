@@ -46,7 +46,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🔭 지구과학 I 천체 관측 시뮬레이터")
-st.caption("시점 화살표의 방향과 2D 관측 시야 스크린의 가시 영역을 기하학적으로 100% 동기화하여 오류를 해결했습니다.")
+st.caption("탑다운 뷰에 지구-태양 가이드라인을 추가하여 낮/밤 상태와 관측 시점의 관계를 더욱 직관적으로 수정했습니다.")
 
 # ==========================================
 # 2. 사이드바 제어판 (관측 조건 설정)
@@ -128,7 +128,7 @@ elif np.pi / 2 < abs(rel_zenith_sun) <= (np.pi / 2 + 0.15):
     sky_status = "TWILIGHT"
     status_tag = "🌆 박명 (Twilight)"
     bg_color = '#1A365D'      # 어두운 푸른색
-    land_color = '#1C2D42'    # 들여쓰기 오류 수정 완료 부분
+    land_color = '#1C2D42'
 else:
     sky_status = "NIGHT"
     status_tag = "🌙 밤 (Night)"
@@ -149,6 +149,9 @@ def plot_solar_system():
     ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)) * 2.0, np.sin(np.linspace(0, 2*np.pi, 100)) * 2.0, '--', color='#2D3748', alpha=0.4)
     ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)) * 3.5, np.sin(np.linspace(0, 2*np.pi, 100)) * 3.5, '--', color='#2D3748', alpha=0.4)
     ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)) * 5.0, np.sin(np.linspace(0, 2*np.pi, 100)) * 5.0, '--', color='#2D3748', alpha=0.4)
+    
+    # 💡 [요청 기능 추가]: 지구에서 태양을 향하는 주황색 가이드 점선 추가 (낮 중심축)
+    ax.plot([ex, 0], [ey, 0], ':', color='#FF8C00', alpha=0.7, linewidth=1.8, label='Sun Direction (Noon)')
     
     # 천체 플로팅
     ax.plot(0, 0, 'oy', markersize=16, label='Sun', color='#FFD700')
@@ -273,7 +276,7 @@ c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown("""
     <div class="metric-card">
-        <h4>🪐 행성의 순행과 역행 (겉보기 운동)</h4>
+        <h4>🪐 행성의 순행 och 역행 (겉보기 운동)</h4>
         <p>행성이 배경 별자리를 기준으로 <b>서쪽에서 동쪽</b>으로 이동하면 <b>순행</b>, <b>동쪽에서 서쪽</b>으로 이동하면 <b>역행</b>이라 합니다. 내행성은 지구와 가장 가까운 <b>내합</b> 부근에서 역행을 보이며, 외행성은 태양의 정반대편인 <b>충</b> 부근에서 지구와의 공전 속도 차이로 인해 역행 현상이 뚜렷하게 관찰됩니다.</p>
     </div>
     """, unsafe_allow_html=True)
@@ -282,7 +285,7 @@ with c2:
     st.markdown("""
     <div class="metric-card">
         <h4>🔭 내행성과 외행성의 관측 시간과 위치</h4>
-        <p><b>내행성(금성 등)</b>은 공전 궤도가 지구 안쪽에 있어 태양와 이루는 이각이 항상 제한적입니다. 따라서 한밤중에는 볼 수 없고 주로 <b>초저녁(동방최대이각, 서쪽 하늘)</b>이나 <b>새벽녘(서방최대이각, 동쪽 하늘)</b>에 잠시 관측됩니다. 반면 <b>외행성(화성 등)</b>은 <b>충 위치에 있을 때 남중하여 밤새도록 관측</b>이 가능합니다.</p>
+        <p><b>내행성(금성 등)</b>은 공전 궤도가 지구 안쪽에 있어 태양과 이루는 이각이 항상 제한적입니다. 따라서 한밤중에는 볼 수 없고 주로 <b>초저녁(동방최대이각, 서쪽 하늘)</b>이나 <b>새벽녘(서방최대이각, 동쪽 하늘)</b>에 잠시 관측됩니다. 반면 <b>외행성(화성 등)</b>은 <b>충 위치에 있을 때 남중하여 밤새도록 관측</b>이 가능합니다.</p>
     </div>
     """, unsafe_allow_html=True)
 
