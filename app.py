@@ -3,20 +3,43 @@ import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 import platform
+import os
+import urllib.request
+import matplotlib.font_manager as fm
 
 # ==========================================
-# 0. 맷플롯립(Matplotlib) 한글 깨짐 방지 폰트 설정
+# 0. [오류 해결] 맷플롯립 한글 깨짐 방지 폰트 자동 다운로드 엔진
 # ==========================================
-try:
+@st.cache_data
+def install_and_load_korean_font():
+    """어떤 환경에서든 한글 깨짐을 방지하기 위해 구글/네이버 나눔고딕 폰트를 자동 로드합니다."""
+    font_url = "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf"
+    font_path = "NanumGothic.ttf"
+    
+    # 폰트 파일이 없으면 인터넷에서 다운로드
+    if not os.path.exists(font_path):
+        try:
+            urllib.request.urlretrieve(font_url, font_path)
+        except Exception:
+            return None
+    return font_path
+
+# 폰트 적용 프로세스
+font_file = install_and_load_korean_font()
+if font_file and os.path.exists(font_file):
+    # 다운로드한 폰트를 맷플롯립에 등록
+    fm.fontManager.addfont(font_file)
+    plt.rcParams['font.family'] = 'NanumGothic'
+else:
+    # 다운로드 실패 시 운영체제별 기본 폰트 폴백(Fallback) 설정
     if platform.system() == 'Windows':
         plt.rcParams['font.family'] = 'Malgun Gothic'
     elif platform.system() == 'Darwin':
         plt.rcParams['font.family'] = 'AppleGothic'
     else:
-        plt.rcParams['font.family'] = 'NanumGothic'
-    plt.rcParams['axes.unicode_minus'] = False
-except:
-    pass
+        plt.rcParams['font.family'] = 'sans-serif'
+
+plt.rcParams['axes.unicode_minus'] = False
 
 # ==========================================
 # 1. 페이지 설정 및 다크 테마 고대비 CSS
@@ -61,26 +84,23 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🔭 지구과학 I 천체 관측 & 식현상 시뮬레이터")
-st.caption("금성 겹침 현상을 수정하고 그래프 내부의 모든 영어 표기를 직관적인 한글로 최적화했습니다.")
+st.caption("위에서 내려다본 시점의 행성 이름 한글 깨짐 오류를 완전히 해결한 버전입니다.")
 
 # ==========================================
 # 2. 사이드바 제어판 (관측 조건 설정)
 # ==========================================
 st.sidebar.header("⚙️ 관측 환경 및 모드 설정")
 
-# 관측 모드 선택 필터 (영어 제거)
 obs_mode = st.sidebar.selectbox(
     "🌌 관측 모드 선택",
     ["일반 우주 관측", "개기 일식 시뮬레이션", "개기 월식 시뮬레이션"]
 )
 
-# 날짜 및 시간 제어
 obs_date = st.sidebar.date_input("관측 날짜 선택", datetime.date(2026, 7, 8))
 
 st.sidebar.markdown("🕒 **관측 시간 선택 (지구 자전)**")
 time_slots = [f"{h:02d}:{m:02d}" for h in range(24) for m in [0, 30]]
 
-# 모드별 최적 추천 시간 기본값 설정
 default_time = "12:00" if "일식" in obs_mode else ("00:00" if "월식" in obs_mode else "14:30")
 selected_time_str = st.sidebar.select_slider(
     "시간을 조절하여 천체의 동서남북 이동 경로와 일주 운동을 확인하세요.",
@@ -88,7 +108,6 @@ selected_time_str = st.sidebar.select_slider(
     value=default_time
 )
 
-# 바라볼 방향 (영어 제거)
 direction = st.sidebar.selectbox("바라볼 방향 (시선 방위)", ["남", "동", "서", "북"])
 
 st.sidebar.markdown("---")
@@ -105,29 +124,20 @@ base_days = (obs_date - datetime.date(2026, 1, 1)).days
 hour, minute = map(int, selected_time_str.split(":"))
 time_hours = hour + (minute / 60.0)
 
-# [A] 공전 절대 각도 (태양 중심 라디안)
 earth_orb_ang = base_days * (2 * np.pi / 365.25)
 mars_orb_ang  = base_days * (2 * np.pi / 687.0) + 0.5
 
-# 관측 모드에 따른 달 및 행성 위치 정밀 동기화
 if "일식" in obs_mode:
-    # 일식 = 삭 (태양-달-지구 일직선 배치)
     moon_orb_ang = earth_orb_ang + np.pi
-    # 💡 [금성 겹침 수정] 일식 때 금성이 태양 뒤에 숨지 않도록 약 35도(0.6 라디안) 측면으로 이동
-    # 개기일식으로 낮이 어두워졌을 때 태양 옆에서 밝게 빛나는 실제 금성 관측 환경을 완벽 재현
-    venus_orb_ang = earth_orb_ang + np.pi + 0.6
+    venus_orb_ang = earth_orb_ang + np.pi + 0.6  # 개기일식 시 금성 겹침 분리 방지 버퍼 반영
 elif "월식" in obs_mode:
-    # 월식 = 망 (태양-지구-달 일직선 배치)
     moon_orb_ang = earth_orb_ang
     venus_orb_ang = base_days * (2 * np.pi / 224.7) + 1.2
 else:
-    # 일반 관측시 원래 주기대로 공전 계산
     moon_orb_ang = earth_orb_ang + (base_days * (2 * np.pi / 29.5))
     venus_orb_ang = base_days * (2 * np.pi / 224.7) + 1.2
 
-# [B] 지구 자전 중심축 및 관측자 천정(Zenith)각 계산
 sun_dir = np.arctan2(0 - np.sin(earth_orb_ang)*3.5, 0 - np.cos(earth_orb_ang)*3.5)
-# 정오(12:00)에 천정이 태양 방향을 완벽히 정렬하도록 세팅
 zenith_dir = sun_dir + ((time_hours - 12.0) / 24.0) * 2 * np.pi
 zenith_dir = (zenith_dir + np.pi) % (2 * np.pi) - np.pi
 
@@ -137,24 +147,16 @@ mx, my = ex + np.cos(moon_orb_ang) * 0.6, ey + np.sin(moon_orb_ang) * 0.6
 marx, mary = np.cos(mars_orb_ang) * 5.0, np.sin(mars_orb_ang) * 5.0
 
 # ==========================================
-# 4. 고도(Alt) 및 방위각(Az) 변환 엔진 (Stellarium 식 역학 알고리즘)
+# 4. 고도 및 방위각 변환 엔진
 # ==========================================
 def get_alt_az(target_x, target_y):
     rx, ry = target_x - ex, target_y - ey
     obj_dir = np.arctan2(ry, rx)
-    
-    # 남중 자오선(zenith_dir) 기준 상대각 산출
     rel_from_south = (obj_dir - zenith_dir + np.pi) % (2 * np.pi) - np.pi
-    
-    # 1) 고도 계산 (남중할 때 최고 고도, 동/서로 90도 멀어지면 지평선 0도)
     alt_rad = (np.pi / 2) * np.cos(rel_from_south)
-    
-    # 2) 방위각 계산 (북=0, 동=90, 남=180, 서=270)
     az_rad = (np.pi - rel_from_south) % (2 * np.pi)
-    
     return alt_rad, az_rad
 
-# 각 천체의 실시간 지평 좌표 추출
 alt_sun, az_sun = get_alt_az(0, 0)
 alt_moon, az_moon = get_alt_az(mx, my) if show_moon else (-99, -99)
 alt_venus, az_venus = get_alt_az(vx, vy) if show_inner else (-99, -99)
@@ -162,7 +164,7 @@ alt_mars, az_mars = get_alt_az(marx, mary) if show_outer else (-99, -99)
 
 
 # ==========================================
-# 5. 환경 상태 및 배경 색상 실시간 결정 (일식 효과 포함)
+# 5. 환경 상태 및 배경 색상 실시간 결정
 # ==========================================
 if alt_sun > 0:
     sky_status = "DAY"
@@ -180,36 +182,32 @@ else:
     bg_color = '#06080c'
     land_color = '#11141D'
 
-# 개기일식 특수 암전 처리
 is_tot_eclipse = False
 if "일식" in obs_mode and alt_sun > 0 and alt_moon > 0:
     if abs(az_sun - az_moon) < 0.15:
         is_tot_eclipse = True
         sky_status = "TOTAL_ECLIPSE"
         status_tag = "🌑 개기 일식"
-        bg_color = '#020406'  # 완전한 암전 효과
+        bg_color = '#020406'
         land_color = '#0B0F19'
 
 
 # ==========================================
-# 6. 시각화 그래프 생성 (전면 한글화)
+# 6. 시각화 그래프 생성
 # ==========================================
 
-# [1] 우주 공간 시점 그래프 (Top-down)
+# [1] 우주 공간 시점 그래프 (Top-down) -> 폰트 꺠짐 완벽 교정
 def plot_solar_system():
     fig, ax = plt.subplots(figsize=(6, 6), facecolor='#06080c')
     ax.set_facecolor('#06080c')
     
-    # 궤도선 표시
     theta_line = np.linspace(0, 2*np.pi, 100)
     ax.plot(np.cos(theta_line) * 2.0, np.sin(theta_line) * 2.0, '--', color='#2D3748', alpha=0.4)
     ax.plot(np.cos(theta_line) * 3.5, np.sin(theta_line) * 3.5, '--', color='#2D3748', alpha=0.4)
     ax.plot(np.cos(theta_line) * 5.0, np.sin(theta_line) * 5.0, '--', color='#2D3748', alpha=0.4)
     
-    # 가이드 남중 지표선 (한글화)
     ax.plot([ex, 0], [ey, 0], ':', color='#FF8C00', alpha=0.7, linewidth=1.8, label='태양 방향 (정오)')
     
-    # 천체 배치 (한글화)
     ax.plot(0, 0, 'oy', markersize=16, color='#FFD700', label='태양')
     ax.plot(ex, ey, 'ob', markersize=9, color='#4169E1', label='지구')
     
@@ -220,7 +218,6 @@ def plot_solar_system():
     if show_outer:
         ax.plot(marx, mary, 'o', markersize=8, color='#D14949', label='화성')
         
-    # 관측 시선 화살표 연산
     if "남" in direction:
         v_ang = zenith_dir
     elif "동" in direction:
@@ -236,16 +233,17 @@ def plot_solar_system():
     ax.set_xlim(-6.5, 6.5)
     ax.set_ylim(-6.5, 6.5)
     ax.axis('off')
+    
+    # 범례 및 텍스트 글꼴이 깨지지 않도록 기본 세팅 적용 확인
     ax.legend(loc='upper right', facecolor='#111622', edgecolor='#2D3748', labelcolor='white', fontsize=10)
     return fig
 
 
-# [2] 지평선 관측 스크린 그래프 (Stellarium 동기화 + 한글화)
+# [2] 지평선 관측 스크린 그래프
 def plot_sky_view():
     fig, ax = plt.subplots(figsize=(7, 4), facecolor=bg_color)
     ax.set_facecolor(bg_color)
     
-    # 지평선 및 대지 렌더링
     ax.axhline(0, color='#4A5568', linewidth=2)
     ax.fill_between([-5, 5], -2, 0, color=land_color)
     
@@ -258,9 +256,8 @@ def plot_sky_view():
     else:
         center_az = 0           
 
-    # 북쪽 시선일 경우 북극성 표시 (한글화)
     if "북" in direction:
-        alt_polaris = 37 * (np.pi / 180) # 서울 위도 기준
+        alt_polaris = 37 * (np.pi / 180)
         y_polaris = (alt_polaris / (np.pi / 2)) * 3.5
         if sky_status != "DAY" or is_tot_eclipse:
             ax.plot(0, y_polaris, '*', color='#63B3ED', markersize=14)
@@ -273,22 +270,19 @@ def plot_sky_view():
             return 
             
         if "북" in direction:
-            # 북쪽 하늘 특수 일주 운동 알고리즘 (북극성 중심 반시계전)
             r = 2.0 * (1.2 - alt / (np.pi/2))
             angle_rot = (az - np.pi/2)
             x_pos = r * np.sin(angle_rot)
             y_pos = 1.8 + r * np.cos(angle_rot)
             if y_pos < 0: return 
         else:
-            # 동, 서, 남 표준 지평 투영
             diff_az = (az - center_az + np.pi) % (2 * np.pi) - np.pi
             if abs(diff_az) > np.pi / 4: 
-                return # 화각 90도 범위 외 스킵
+                return 
                 
             x_pos = diff_az * (4.5 / (np.pi / 4))
             y_pos = (alt / (np.pi / 2)) * 3.5
 
-        # 광도 가시성 필터링
         alpha_val = 1.0
         color = default_color
         
@@ -296,10 +290,9 @@ def plot_sky_view():
             alpha_val = 0.0  
             
         if sky_status == "TOTAL_ECLIPSE":
-            alpha_val = 1.0  # 개기일식 암전 시 모든 천체 보이게 설정
+            alpha_val = 1.0  
             
         if name == "태양" and is_tot_eclipse:
-            # 개기일식 코로나 그래픽 처리 (한글화)
             ax.plot(x_pos, y_pos, 'o', color='#FFFFFF', markersize=size+8, alpha=0.9)
             ax.plot(x_pos, y_pos, 'o', color='#000000', markersize=size, alpha=1.0)
             ax.text(x_pos, y_pos - 0.4, "코로나 (개기일식)", **text_style)
@@ -309,7 +302,6 @@ def plot_sky_view():
             ax.plot(x_pos, y_pos, marker, color=color, markersize=size, alpha=alpha_val)
             ax.text(x_pos, y_pos - 0.4, name, alpha=alpha_val, **text_style)
 
-    # 우주 천체 전체 렌더링 호출 (한글 이름으로 전달)
     render_body(alt_sun, az_sun, "태양", "#FF8C00", "o", 22)
     
     if show_moon: 
